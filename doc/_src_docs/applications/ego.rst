@@ -1,6 +1,11 @@
 Efficient Global Optimization (EGO)
 ===================================
 
+.. IMPORTANT::
+   
+	The EGO implementation here is given for educational purpose as an illustration of surrogate-based optimization, 
+	if you seek for a more complete and robust implementation for production use, please refer to `smt-optim <https://github.com/SMTorg/smt-optim>`_
+
 Bayesian Optimization
 ---------------------
 
@@ -159,7 +164,7 @@ Beside the Expected Improvement, the implementation here offers two other infill
 Regarding the parallel execution, one can implement specific multiprocessing by deriving the _Evaluator_ interface
 and overriding the default implementation of the _run(fun, x)_ method. The default implementation simply runs _fun(x)_.
 
-Regardless the others parameters, you can specify a mixed surrogate model to make mixed optimization. See [8]_.
+Regardless the others parameters, you can specify a mixed surrogate model to make mixed optimization. See [8]_ .
 The expected improvement is continuously computed and optimized so that can lead to an infill point that will be projected, in the mixed case, to an already evaluated point.
 To avoid the re-evaluation of a point, you can penalize the Expected Improvement via tunneling which decrease the EI in the neighbourhood of the known DOE points.
 However, this is not recommanded for high dimensional problems because the re-evaluation is uncommon. Tunneling evaluation can be slow with a lot of point.
@@ -189,16 +194,20 @@ References
 
 .. [7] Roux, E. (2011). Assemblage mécanique: stratégies d'optimisation des procédés et d'identification des comportements mécaniques des matériaux (Doctoral dissertation).
 
-.. [8] E.C. Garrido-Merchan and D. Hernandez-Lobato. Dealing with categorical and integer-valued variables in Bayesian Optimization with Gaussian processes. In:Neurocomputing 380 (2020), pages 20–35. 
+.. [8] Saves, P. and Diouane, Y. and Bartoli, N. and Lefebvre, T. and Morlier, J., A general square exponential kernel to handle mixed-categorical variables for Gaussian process, AIAA Aviation 2022 Forum, pp. 3870. 
+
 
 Usage
 -----
 
 .. code-block:: python
 
-  import numpy as np
-  from smt.applications import EGO
   import matplotlib.pyplot as plt
+  import numpy as np
+  
+  from smt.applications import EGO
+  from smt.design_space import DesignSpace
+  from smt.surrogate_models import KRG
   
   def function_test_1d(x):
       # function xsinx
@@ -211,15 +220,24 @@ Usage
   
   n_iter = 6
   xlimits = np.array([[0.0, 25.0]])
+  
+  seed = 42  # for reproducibility
+  design_space = DesignSpace(xlimits, seed=seed)
   xdoe = np.atleast_2d([0, 7, 25]).T
   n_doe = xdoe.size
   
   criterion = "EI"  #'EI' or 'SBO' or 'LCB'
   
-  ego = EGO(n_iter=n_iter, criterion=criterion, xdoe=xdoe, xlimits=xlimits)
+  ego = EGO(
+      n_iter=n_iter,
+      criterion=criterion,
+      xdoe=xdoe,
+      surrogate=KRG(design_space=design_space, print_global=False),
+      seed=seed,
+  )
   
   x_opt, y_opt, _, x_data, y_data = ego.optimize(fun=function_test_1d)
-  print("Minimum in x={:.1f} with f(x)={:.1f}".format(float(x_opt), float(y_opt)))
+  print("Minimum in x={:.1f} with f(x)={:.1f}".format(x_opt.item(), y_opt.item()))
   
   x_plot = np.atleast_2d(np.linspace(0, 25, 100)).T
   y_plot = function_test_1d(x_plot)
@@ -234,7 +252,7 @@ Usage
   
       y_gp_plot = ego.gpr.predict_values(x_plot)
       y_gp_plot_var = ego.gpr.predict_variances(x_plot)
-      y_ei_plot = -ego.EI(x_plot, y_data_k)
+      y_ei_plot = -ego.EI(x_plot)
   
       ax = fig.add_subplot((n_iter + 1) // 2, 2, i + 1)
       ax1 = ax.twinx()
@@ -255,7 +273,7 @@ Usage
           x_plot.T[0], sig_plus.T[0], sig_moins.T[0], alpha=0.3, color="g"
       )
       lines = [true_fun, data, gp, un_gp, opt, ei]
-      fig.suptitle("EGO optimization of $f(x) = x \sin{x}$")
+      fig.suptitle("EGO optimization of $f(x) = x \\sin{x}$")
       fig.subplots_adjust(hspace=0.4, wspace=0.4, top=0.8)
       ax.set_title("iteration {}".format(i + 1))
       fig.legend(
@@ -270,22 +288,11 @@ Usage
           ],
       )
   plt.show()
+  # Check the optimal point is x_opt=18.9, y_opt =-15.1
   
 ::
 
-  1.052132722586334
-  1.0919447438475844
-  0.6061855746849575
-  0.7273731249538761
-  2.6304473982393293
-  7.69717761422107
   Minimum in x=18.9 with f(x)=-15.1
-  1.052132722586334
-  1.0919447438475844
-  0.6061855746849575
-  0.7273731242433592
-  2.6304473982393293
-  7.69717761422107
   
 .. figure:: ego_TestEGO_run_ego_example.png
   :scale: 80 %
@@ -296,16 +303,12 @@ Usage with parallel options
 
 .. code-block:: python
 
-  import numpy as np
-  from smt.applications import EGO
-  from smt.applications.ego import EGO, Evaluator
-  from smt.sampling_methods import FullFactorial
-  
-  import sklearn
   import matplotlib.pyplot as plt
-  from matplotlib import colors
-  from mpl_toolkits.mplot3d import Axes3D
-  from scipy.stats import norm
+  import numpy as np
+  
+  from smt.applications import EGO
+  from smt.applications.ego import Evaluator
+  from smt.surrogate_models import KRG, DesignSpace
   
   def function_test_1d(x):
       # function xsinx
@@ -320,6 +323,9 @@ Usage with parallel options
   n_parallel = 3
   n_start = 50
   xlimits = np.array([[0.0, 25.0]])
+  
+  seed = 42
+  design_space = DesignSpace(xlimits, seed=seed)
   xdoe = np.atleast_2d([0, 7, 25]).T
   n_doe = xdoe.size
   
@@ -328,12 +334,13 @@ Usage with parallel options
       Implement Evaluator interface using multiprocessing ThreadPool object (Python 3 only).
       """
   
-      def run(self, fun, x):
+      def run(self, fun, x, design_space=None):
           n_thread = 5
           # Caveat: import are made here due to SMT documentation building process
-          import numpy as np
-          from sys import version_info
           from multiprocessing.pool import ThreadPool
+          from sys import version_info
+  
+          import numpy as np
   
           if version_info.major == 2:
               return fun(x)
@@ -354,16 +361,16 @@ Usage with parallel options
       n_iter=n_iter,
       criterion=criterion,
       xdoe=xdoe,
-      xlimits=xlimits,
+      surrogate=KRG(design_space=design_space, print_global=False),
       n_parallel=n_parallel,
       qEI=qEI,
       n_start=n_start,
       evaluator=ParallelEvaluator(),
-      random_state=42,
+      seed=seed,
   )
   
   x_opt, y_opt, _, x_data, y_data = ego.optimize(fun=function_test_1d)
-  print("Minimum in x={:.1f} with f(x)={:.1f}".format(float(x_opt), float(y_opt)))
+  print("Minimum in x={:.1f} with f(x)={:.1f}".format(x_opt.item(), y_opt.item()))
   
   x_plot = np.atleast_2d(np.linspace(0, 25, 100)).T
   y_plot = function_test_1d(x_plot)
@@ -379,7 +386,7 @@ Usage with parallel options
           ego.gpr.set_training_values(x_data_sub, y_data_sub)
           ego.gpr.train()
   
-          y_ei_plot = -ego.EI(x_plot, y_data_sub)
+          y_ei_plot = -ego.EI(x_plot)
           y_gp_plot = ego.gpr.predict_values(x_plot)
           y_gp_plot_var = ego.gpr.predict_variances(x_plot)
   
@@ -418,7 +425,7 @@ Usage with parallel options
               x_plot.T[0], sig_plus.T[0], sig_moins.T[0], alpha=0.3, color="g"
           )
           lines = [true_fun, data, gp, un_gp, opt, ei, virt_data]
-          fig.suptitle("EGOp optimization of $f(x) = x \sin{x}$")
+          fig.suptitle("EGOp optimization of $f(x) = x \\sin{x}$")
           fig.subplots_adjust(hspace=0.4, wspace=0.4, top=0.8)
           ax.set_title("iteration {}.{}".format(i, p))
           fig.legend(
@@ -437,25 +444,7 @@ Usage with parallel options
   
 ::
 
-  1.052132722586334
-  1.6787259521499427
-  1.0601210996649075
-  3.1093707649001145
-  2.8419424424764017
-  5.3449774225833835
-  14.444412048326077
-  19.138763483951696
-  24.796284315881028
   Minimum in x=19.0 with f(x)=-15.1
-  1.052132722586334
-  1.6787259521499427
-  1.0601210996649075
-  3.1093707649001145
-  2.8419424424764017
-  5.344977562898791
-  14.444412048326077
-  19.13876389039654
-  24.79693232893584
   
 .. figure:: ego_TestEGO_run_ego_parallel_example.png
   :scale: 80 %
@@ -466,17 +455,18 @@ Usage with mixed variable
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .. code-block:: python
 
-  import numpy as np
-  from smt.applications import EGO
-  from smt.applications.mixed_integer import (
-      MixedIntegerContext,
-      FLOAT,
-      ENUM,
-      ORD,
-  )
   import matplotlib.pyplot as plt
-  from smt.surrogate_models import KRG
-  from smt.sampling_methods import LHS
+  import numpy as np
+  
+  from smt.applications import EGO
+  from smt.applications.mixed_integer import MixedIntegerContext
+  from smt.design_space import (
+      CategoricalVariable,
+      DesignSpace,
+      FloatVariable,
+      IntegerVariable,
+  )
+  from smt.surrogate_models import KRG, MixIntKernelType
   
   # Regarding the interface, the function to be optimized should handle
   # categorical values as index values in the enumeration type specification.
@@ -502,19 +492,31 @@ Usage with mixed variable
           + (x2 + 2 * x3 + 3 * x4) * x6 * 0.95 * x1
           + i
       )
-      return y
+      return y.reshape((-1, 1))
   
   n_iter = 15
-  xtypes = [FLOAT, (ENUM, 3), (ENUM, 2), ORD]
-  xlimits = np.array(
-      [[-5, 5], ["red", "green", "blue"], ["square", "circle"], [0, 2]]
+  seed = 42
+  design_space = DesignSpace(
+      [
+          FloatVariable(-5, 5),
+          CategoricalVariable(["blue", "red", "green"]),
+          CategoricalVariable(["square", "circle"]),
+          IntegerVariable(0, 2),
+      ],
+      seed=seed,
   )
+  
   criterion = "EI"  #'EI' or 'SBO' or 'LCB'
-  qEI = "KB"
-  sm = KRG(print_global=False)
-  mixint = MixedIntegerContext(xtypes, xlimits)
+  qEI = "KBRand"
+  sm = KRG(
+      design_space=design_space,
+      categorical_kernel=MixIntKernelType.GOWER,
+      hyper_opt="Cobyla",
+      print_global=False,
+  )
+  mixint = MixedIntegerContext(design_space)
   n_doe = 3
-  sampling = mixint.build_sampling_method(LHS, criterion="ese", random_state=42)
+  sampling = mixint.build_sampling_method(seed=seed)
   xdoe = sampling(n_doe)
   ydoe = function_test_mixed_integer(xdoe)
   
@@ -523,28 +525,27 @@ Usage with mixed variable
       criterion=criterion,
       xdoe=xdoe,
       ydoe=ydoe,
-      xtypes=xtypes,
-      xlimits=xlimits,
       surrogate=sm,
       qEI=qEI,
-      random_state=42,
+      n_parallel=2,
+      seed=seed,
   )
   
   x_opt, y_opt, _, _, y_data = ego.optimize(fun=function_test_mixed_integer)
-  print("Minimum in x={} with f(x)={:.1f}".format(x_opt, float(y_opt)))
-  print("Minimum in typed x={}".format(ego.mixint.cast_to_mixed_integer(x_opt)))
+  print("Minimum in x={} with f(x)={:.1f}".format(x_opt, y_opt.item()))
+  # print("Minimum in typed x={}".format(ego.mixint.cast_to_mixed_integer(x_opt)))
   
   min_ref = -15
   mini = np.zeros(n_iter)
   for k in range(n_iter):
       mini[k] = np.log(np.abs(np.min(y_data[0 : k + n_doe - 1]) - min_ref))
   x_plot = np.linspace(1, n_iter + 0.5, n_iter)
-  u = max(np.floor(max(mini)) + 1, -100)
-  l = max(np.floor(min(mini)) - 0.2, -10)
+  up = max(np.floor(max(mini)) + 1, -100)
+  lo = max(np.floor(min(mini)) - 0.2, -10)
   fig = plt.figure()
   axes = fig.add_axes([0.1, 0.1, 0.8, 0.8])
   axes.plot(x_plot, mini, color="r")
-  axes.set_ylim([l, u])
+  axes.set_ylim([lo, up])
   plt.title("minimum convergence plot", loc="center")
   plt.xlabel("number of iterations")
   plt.ylabel("log of the difference w.r.t the best")
@@ -552,31 +553,7 @@ Usage with mixed variable
   
 ::
 
-  1.7171327573567874
-  5.17913617118403
-  2.3377272641873126
-  3.7719547871155403
-  5.970313119124848
-  7.913338531586103
-  10.501012346037392
-  Warning: multiple x input features have the same value (at least same row twice).
-  23.667170925998867
-  Warning: multiple x input features have the same value (at least same row twice).
-  36.85698002499019
-  Warning: multiple x input features have the same value (at least same row twice).
-  49.92759075130636
-  Warning: multiple x input features have the same value (at least same row twice).
-  51.45439480815928
-  Warning: multiple x input features have the same value (at least same row twice).
-  53.03524903226676
-  Warning: multiple x input features have the same value (at least same row twice).
-  55.42698307830959
-  Warning: multiple x input features have the same value (at least same row twice).
-  57.84149935073869
-  Warning: multiple x input features have the same value (at least same row twice).
-  71.27594591461593
-  Minimum in x=[-5.  2.  1.  1.] with f(x)=-13.2
-  Minimum in typed x=[-5.0, 'blue', 'circle', 1]
+  Minimum in x=[-5.  2.  1.  0.] with f(x)=-14.2
   
 .. figure:: ego_TestEGO_run_ego_mixed_integer_example.png
   :scale: 80 %
@@ -632,7 +609,7 @@ Options
      -  ['str']
      -  Approximated q-EI maximization strategy
   *  -  evaluator
-     -  <smt.applications.ego.Evaluator object at 0x2b679996c220>
+     -  <smt.applications.ego.Evaluator object at 0x00000274AE9714F0>
      -  None
      -  ['Evaluator']
      -  Object used to run function fun to optimize at x points (nsamples, nxdim)
@@ -651,11 +628,6 @@ Options
      -  None
      -  ['ndarray']
      -  Initial doe outputs
-  *  -  xlimits
-     -  None
-     -  None
-     -  ['ndarray']
-     -  Bounds of function fun inputs
   *  -  verbose
      -  False
      -  None
@@ -666,23 +638,18 @@ Options
      -  None
      -  ['bool']
      -  Enable the penalization of points that have been already evaluated in EI criterion
-  *  -  categorical_kernel
+  *  -  is_ri
+     -  False
      -  None
-     -  ['gower', 'homoscedastic_gaussian_matrix_kernel', 'full_gaussian_matrix_kernel']
-     -  ['str']
-     -  The kernel to use for categorical inputs. Only for non continuous Kriging.
+     -  ['bool']
+     -  Enable to re interpolate the variance for training points
   *  -  surrogate
-     -  <smt.surrogate_models.krg.KRG object at 0x2b679a1303d0>
+     -  <smt.surrogate_models.krg.KRG object at 0x00000274AE99E330>
      -  None
-     -  ['KRG', 'KPLS', 'KPLSK', 'MGP']
+     -  ['KRG', 'KPLS', 'KPLSK', 'GEKPLS', 'MGP', 'GPX', 'CoopCompKRG']
      -  SMT kriging-based surrogate model used internaly
-  *  -  xtypes
+  *  -  seed
      -  None
      -  None
-     -  ['list']
-     -  x type specifications: either FLOAT for continuous, INT for integer or (ENUM n) for categorical doimension with n levels
-  *  -  random_state
-     -  None
-     -  None
-     -  ['NoneType', 'int', 'RandomState']
-     -  Numpy RandomState object or seed number which controls random draws
+     -  ['NoneType', 'int', 'Generator']
+     -  Numpy Generator object or seed number which controls random draws

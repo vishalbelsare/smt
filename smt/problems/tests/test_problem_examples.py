@@ -1,16 +1,19 @@
 import unittest
 
-import matplotlib
-import matplotlib.pyplot
+try:
+    import matplotlib
 
-matplotlib.use("Agg")
-matplotlib.pyplot.switch_backend("Agg")
+    matplotlib.use("Agg")
+    NO_MATPLOTLIB = False
+except ImportError:
+    NO_MATPLOTLIB = True
 
 
 class Test(unittest.TestCase):
+    @unittest.skipIf(NO_MATPLOTLIB, "Matplotlib not installed")
     def test_cantilever_beam(self):
-        import numpy as np
         import matplotlib.pyplot as plt
+        import numpy as np
 
         from smt.problems import CantileverBeam
 
@@ -36,9 +39,71 @@ class Test(unittest.TestCase):
         plt.ylabel("y")
         plt.show()
 
-    def test_robot_arm(self):
-        import numpy as np
+    @unittest.skipIf(NO_MATPLOTLIB, "Matplotlib not installed")
+    def test_mixed_cantilever_beam(self):
         import matplotlib.pyplot as plt
+
+        from smt.problems import MixedCantileverBeam
+
+        problem = MixedCantileverBeam()
+
+        n_doe = 100
+        xdoe = problem.sample(n_doe)
+        y = problem(xdoe)
+
+        plt.scatter(xdoe[:, 0], y)
+        plt.xlabel("x")
+        plt.ylabel("y")
+        plt.show()
+
+    # •   @unittest.skipIf(NO_MATPLOTLIB, "Matplotlib not installed")
+    def test_hier_neural_network(self):
+        import matplotlib.pyplot as plt
+
+        from smt.applications.mixed_integer import MixedIntegerSamplingMethod
+        from smt.problems import HierarchicalNeuralNetwork
+        from smt.sampling_methods import LHS
+
+        problem = HierarchicalNeuralNetwork()
+        ds = problem.design_space
+        n_doe = 100
+        ds.seed = 42
+        samp = MixedIntegerSamplingMethod(LHS, ds, criterion="ese", seed=ds.seed)
+        xdoe = samp(n_doe)
+        x_corr, eval_is_acting = ds.correct_get_acting(xdoe)
+        y = problem(x=x_corr, kx=None, eval_is_acting=eval_is_acting)
+
+        plt.scatter(xdoe[:, 0], y)
+        plt.xlabel("x")
+        plt.ylabel("y")
+        plt.show()
+
+    @unittest.skipIf(NO_MATPLOTLIB, "Matplotlib not installed")
+    def test_hier_goldstein(self):
+        import matplotlib.pyplot as plt
+
+        from smt.applications.mixed_integer import MixedIntegerSamplingMethod
+        from smt.problems import HierarchicalGoldstein
+        from smt.sampling_methods import LHS
+
+        problem = HierarchicalGoldstein()
+        ds = problem.design_space
+        n_doe = 100
+        ds.seed = 42
+        samp = MixedIntegerSamplingMethod(LHS, ds, criterion="ese", seed=ds.seed)
+        xdoe = samp(n_doe)
+
+        y = problem(xdoe)
+
+        plt.scatter(xdoe[:, 0], y)
+        plt.xlabel("x")
+        plt.ylabel("y")
+        plt.show()
+
+    @unittest.skipIf(NO_MATPLOTLIB, "Matplotlib not installed")
+    def test_robot_arm(self):
+        import matplotlib.pyplot as plt
+        import numpy as np
 
         from smt.problems import RobotArm
 
@@ -63,9 +128,10 @@ class Test(unittest.TestCase):
         plt.ylabel("y")
         plt.show()
 
+    @unittest.skipIf(NO_MATPLOTLIB, "Matplotlib not installed")
     def test_rosenbrock(self):
-        import numpy as np
         import matplotlib.pyplot as plt
+        import numpy as np
 
         from smt.problems import Rosenbrock
 
@@ -90,9 +156,10 @@ class Test(unittest.TestCase):
         plt.ylabel("y")
         plt.show()
 
+    @unittest.skipIf(NO_MATPLOTLIB, "Matplotlib not installed")
     def test_sphere(self):
-        import numpy as np
         import matplotlib.pyplot as plt
+        import numpy as np
 
         from smt.problems import Sphere
 
@@ -117,9 +184,10 @@ class Test(unittest.TestCase):
         plt.ylabel("y")
         plt.show()
 
+    @unittest.skipIf(NO_MATPLOTLIB, "Matplotlib not installed")
     def test_branin(self):
-        import numpy as np
         import matplotlib.pyplot as plt
+        import numpy as np
 
         from smt.problems import Branin
 
@@ -144,9 +212,10 @@ class Test(unittest.TestCase):
         plt.ylabel("y")
         plt.show()
 
+    @unittest.skipIf(NO_MATPLOTLIB, "Matplotlib not installed")
     def test_lp_norm(self):
-        import numpy as np
         import matplotlib.pyplot as plt
+        import numpy as np
 
         from smt.problems import LpNorm
 
@@ -171,9 +240,10 @@ class Test(unittest.TestCase):
         plt.ylabel("y")
         plt.show()
 
+    @unittest.skipIf(NO_MATPLOTLIB, "Matplotlib not installed")
     def test_tensor_product(self):
-        import numpy as np
         import matplotlib.pyplot as plt
+        import numpy as np
 
         from smt.problems import TensorProduct
 
@@ -198,9 +268,10 @@ class Test(unittest.TestCase):
         plt.ylabel("y")
         plt.show()
 
+    @unittest.skipIf(NO_MATPLOTLIB, "Matplotlib not installed")
     def test_torsion_vibration(self):
-        import numpy as np
         import matplotlib.pyplot as plt
+        import numpy as np
 
         from smt.problems import TorsionVibration
 
@@ -226,9 +297,10 @@ class Test(unittest.TestCase):
         plt.ylabel("y")
         plt.show()
 
+    @unittest.skipIf(NO_MATPLOTLIB, "Matplotlib not installed")
     def test_water_flow(self):
-        import numpy as np
         import matplotlib.pyplot as plt
+        import numpy as np
 
         from smt.problems import WaterFlow
 
@@ -254,9 +326,10 @@ class Test(unittest.TestCase):
         plt.ylabel("y")
         plt.show()
 
+    @unittest.skipIf(NO_MATPLOTLIB, "Matplotlib not installed")
     def test_welded_beam(self):
-        import numpy as np
         import matplotlib.pyplot as plt
+        import numpy as np
 
         from smt.problems import WeldedBeam
 
@@ -282,9 +355,10 @@ class Test(unittest.TestCase):
         plt.ylabel("y")
         plt.show()
 
+    @unittest.skipIf(NO_MATPLOTLIB, "Matplotlib not installed")
     def test_wing_weight(self):
-        import numpy as np
         import matplotlib.pyplot as plt
+        import numpy as np
 
         from smt.problems import WingWeight
 

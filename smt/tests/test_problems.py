@@ -4,30 +4,27 @@ Author: Dr. John T. Hwang <hwangjt@umich.edu>
 This package is distributed under New BSD license.
 """
 
-import numpy as np
 import unittest
 
+import numpy as np
+
 from smt.problems import (
+    Branin,
     CantileverBeam,
-    Sphere,
+    LpNorm,
+    NdimCantileverBeam,
+    NdimRobotArm,
+    NdimRosenbrock,
+    NdimStepFunction,
     ReducedProblem,
     RobotArm,
     Rosenbrock,
-    Branin,
-    LpNorm,
-)
-from smt.problems import (
+    Sphere,
     TensorProduct,
     TorsionVibration,
     WaterFlow,
     WeldedBeam,
     WingWeight,
-)
-from smt.problems import (
-    NdimCantileverBeam,
-    NdimRobotArm,
-    NdimRosenbrock,
-    NdimStepFunction,
 )
 from smt.utils.sm_test_case import SMTestCase
 
@@ -75,7 +72,7 @@ class Test(SMTestCase):
 
                 dydx_FD[:] = (y_FD[:, iy] - y0[:, iy]) / h
                 dydx_CS[:] = np.imag(y_CS[:, iy]) / ch
-                dydx_AN[:] = problem(x, idim)[:, iy]
+                dydx_AN[:] = problem(x, kx=idim)[:, iy]
 
                 abs_rms_error_FD = np.linalg.norm(dydx_FD - dydx_AN)
                 rel_rms_error_FD = np.linalg.norm(dydx_FD - dydx_AN) / np.linalg.norm(
@@ -83,8 +80,8 @@ class Test(SMTestCase):
                 )
 
                 abs_rms_error_CS = np.linalg.norm(dydx_CS - dydx_AN)
-                rel_rms_error_CS = np.linalg.norm(dydx_CS - dydx_AN) / np.linalg.norm(
-                    dydx_CS
+                rel_rms_error_CS = np.linalg.norm(dydx_CS - dydx_AN) / (
+                    np.linalg.norm(dydx_CS) + np.finfo(float).eps * 0.001
                 )
 
                 msg = (
@@ -129,7 +126,17 @@ class Test(SMTestCase):
         self.run_test(Branin(ndim=2))
 
     def test_lp_norm(self):
-        self.run_test(LpNorm(ndim=2))
+        self.run_test(LpNorm(ndim=1, order=1))
+        self.run_test(LpNorm(ndim=2, order=2))
+        self.run_test(LpNorm(ndim=3, order=3))
+
+    def test_reduced_problem_extra(self):
+        # Test integer dims (ReducedProblem line ~35)
+        self.run_test(ReducedProblem(Sphere(ndim=5), dims=2))
+
+        # Test invalid dims (ReducedProblem line ~43)
+        with self.assertRaises(ValueError):
+            ReducedProblem(Sphere(ndim=5), dims="invalid")
 
     def test_rosenbrock(self):
         self.run_test(Rosenbrock(ndim=2))

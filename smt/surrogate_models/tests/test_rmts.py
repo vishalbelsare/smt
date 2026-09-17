@@ -5,13 +5,13 @@ This package is distributed under New BSD license.
 """
 
 import unittest
-import numpy as np
-import matplotlib.pyplot as plt
 
+import numpy as np
+
+from smt.surrogate_models import RMTB
+from smt.utils.misc import compute_relative_error
 from smt.utils.silence import Silence
 from smt.utils.sm_test_case import SMTestCase
-from smt.utils import compute_rms_error
-from smt.surrogate_models import RMTB, RMTC
 
 
 def function_test_1d(x):
@@ -31,8 +31,7 @@ class TestRMTS(SMTestCase):
         self.yt = function_test_1d(self.xt)
 
         self.xlimits = np.array([[0.0, 25.0]])
-
-        self.smref = smref = RMTB(xlimits=self.xlimits, print_global=False)
+        smref = RMTB(xlimits=self.xlimits, print_global=False)
         smref.set_training_values(self.xt, self.yt)
         with Silence():
             smref.train()
@@ -52,12 +51,15 @@ class TestRMTS(SMTestCase):
             with Silence():
                 self.sms[ls].train()
 
-            error = compute_rms_error(self.sms[ls], self.xref, self.yref)
+            error = compute_relative_error(self.sms[ls], self.xref, self.yref)
             self.assert_error(error, 0.0, 1e-1)
 
     def test_linear_solver(self):
+        from smt.utils.linear_solvers import KrylovSolver
+
         for ls in [
             "krylov-dense",
+            "dense-lu",
             "dense-chol",
             "lu",
             "ilu",
@@ -72,10 +74,24 @@ class TestRMTS(SMTestCase):
             self.sms[ls] = RMTB(xlimits=self.xlimits, solver=ls, print_global=False)
             self.sms[ls].set_training_values(self.xt, self.yt)
 
+            # Test different Krylov variants for coverage
+            if ls == "krylov":
+                for solver_type in ["bicgstab", "gmres"]:
+                    # Directly pass a solver instance to test internal Krylov algorithms
+                    custom_solver = KrylovSolver(solver=solver_type)
+                    self.sms[ls + "_" + solver_type] = RMTB(
+                        xlimits=self.xlimits, solver=custom_solver, print_global=False
+                    )
+                    self.sms[ls + "_" + solver_type].set_training_values(
+                        self.xt, self.yt
+                    )
+                    with Silence():
+                        self.sms[ls + "_" + solver_type].train()
+
             with Silence():
                 self.sms[ls].train()
 
-            error = compute_rms_error(self.sms[ls], self.xref, self.yref)
+            error = compute_relative_error(self.sms[ls], self.xref, self.yref)
             self.assert_error(error, 0.0, 1.1)
 
 

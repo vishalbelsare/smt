@@ -4,16 +4,16 @@ Author: Dr. Mohamed A. Bouhlel <mbouhlel@umich.edu>
 
 This package is distributed under New BSD license.
 """
+
 import numpy as np
-from scipy.sparse import csc_matrix
-from smt.surrogate_models.surrogate_model import SurrogateModel
-from smt.utils.caching import cached_operation
 
 from smt.surrogate_models.idwclib import PyIDW
+from smt.surrogate_models.surrogate_model import SurrogateModel
+from smt.utils import persistence
+from smt.utils.caching import cached_operation
 
 
 class IDW(SurrogateModel):
-
     """
     Inverse distance weighting interpolant
     This model uses the inverse distance between the unknown and training
@@ -47,6 +47,16 @@ class IDW(SurrogateModel):
 
         self.idwc = PyIDW()
         self.idwc.setup(nx, nt, self.options["p"], xt.flatten())
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["idwc"] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
+        self._setup()
 
     ############################################################################
     # Model functions
@@ -133,3 +143,10 @@ class IDW(SurrogateModel):
 
         dy_dyt = {None: jac}
         return dy_dyt
+
+    def save(self, filename):
+        persistence.save(self, filename)
+
+    @staticmethod
+    def load(filename):
+        return persistence.load(filename)

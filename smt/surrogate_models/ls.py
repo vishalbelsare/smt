@@ -7,15 +7,16 @@ This package is distributed under New BSD license.
 TO DO:
 - define outputs['sol'] = self.sol
 """
-import numpy as np
 
+import numpy as np
 from sklearn import linear_model
+
 from smt.surrogate_models.surrogate_model import SurrogateModel
+from smt.utils import persistence
 from smt.utils.caching import cached_operation
 
 
 class LS(SurrogateModel):
-
     """
     Least square model.
     This model uses the linear_model.LinearRegression class from scikit-learn.
@@ -28,7 +29,6 @@ class LS(SurrogateModel):
         super(LS, self)._initialize()
         declare = self.options.declare
         supports = self.supports
-
         declare(
             "data_dir",
             values=None,
@@ -46,14 +46,10 @@ class LS(SurrogateModel):
         """
         Train the model
         """
-        pts = self.training_points
-
-        if 0 in pts[None]:
-            x = pts[None][0][0]
-            y = pts[None][0][1]
-
+        X = self.training_points[None][0][0]
+        y = self.training_points[None][0][1]
         self.mod = linear_model.LinearRegression()
-        self.mod.fit(x, y)
+        self.mod.fit(X, y)
 
     def _train(self):
         """
@@ -65,7 +61,6 @@ class LS(SurrogateModel):
                 self.sol = outputs["sol"]
             else:
                 self._new_train()
-                # outputs['sol'] = self.sol
 
     def _predict_values(self, x):
         """
@@ -104,5 +99,11 @@ class LS(SurrogateModel):
         # Initialization
         n_eval, n_features_x = x.shape
         y = np.ones((n_eval, self.ny)) * self.mod.coef_[:, kx]
-
         return y
+
+    def save(self, filename):
+        persistence.save(self, filename)
+
+    @staticmethod
+    def load(filename):
+        return persistence.load(filename)

@@ -5,14 +5,18 @@ Author: Dr. Mohamed Amine Bouhlel <mbouhlel@umich.edu>
 This package is distributed under New BSD license.
 
 Aircraft wing weight problem from:
-Liu, H., Xu, S., & Wang, X. Sampling strategies and metamodeling techniques for engineering design: comparison and application. In ASME Turbo Expo 2016: Turbomachinery Technical Conference and Exposition. American Society of Mechanical Engineers. June, 2016.
+Liu, H., Xu, S., & Wang, X. Sampling strategies and metamodeling techniques for engineering design:
+comparison and application. In ASME Turbo Expo 2016: Turbomachinery Technical Conference and Exposition.
+American Society of Mechanical Engineers. June, 2016.
+
 Forrester, A., Sobester, A., and Keane, A., 2008,
 Engineering Design Via Surrogate Modelling: A Practical Guide, John Wiley & Sons, United Kingdom.
 """
+
 import numpy as np
-from scipy.misc import derivative
 
 from smt.problems.problem import Problem
+from smt.utils.misc import SCIPY_DERIVATIVE
 
 
 class WingWeight(Problem):
@@ -57,16 +61,16 @@ class WingWeight(Problem):
                 args[var] = x
                 return func(*args)
 
-            return derivative(wraps, point[var], dx=1e-6)
+            return SCIPY_DERIVATIVE(wraps, point[var], dx=1e-6)
 
         def func(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9):
             return (
                 0.036
-                * x0 ** 0.758
-                * x1 ** 0.0035
-                * (x2 / np.cos(deg2rad(x3)) ** 2)
-                * x4 ** 0.006
-                * x5 ** 0.04
+                * x0**0.758
+                * x1**0.0035
+                * (x2 / np.cos(deg2rad(x3)) ** 2) ** (0.6)
+                * x4**0.006
+                * x5**0.04
                 * (100 * x6 / np.cos(deg2rad(x3))) ** (-0.3)
                 * (x7 * x8) ** 0.49
                 + x0 * x9

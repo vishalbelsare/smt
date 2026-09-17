@@ -4,20 +4,17 @@ Surrogate modeling methods
 SMT contains the surrogate modeling methods listed below.
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 3
    :titlesonly:
 
+   surrogate_models/ls
+   surrogate_models/qp
+   surrogate_models/gpr
    surrogate_models/rbf
    surrogate_models/idw
    surrogate_models/rmts
-   surrogate_models/ls
-   surrogate_models/qp
-   surrogate_models/krg
-   surrogate_models/kpls
-   surrogate_models/kplsk
-   surrogate_models/gekpls
    surrogate_models/genn
-   surrogate_models/mgp
+   surrogate_models/rbfgen
 
 
 Usage
@@ -25,8 +22,8 @@ Usage
 
 .. code-block:: python
 
-  import numpy as np
   import matplotlib.pyplot as plt
+  import numpy as np
   
   from smt.surrogate_models import RBF
   
@@ -66,13 +63,13 @@ Usage
      Training ...
         Initializing linear solver ...
            Performing LU fact. (5 x 5 mtx) ...
-           Performing LU fact. (5 x 5 mtx) - done. Time (sec):  0.0000000
-        Initializing linear solver - done. Time (sec):  0.0000000
+           Performing LU fact. (5 x 5 mtx) - done. Time (sec):  0.0000904
+        Initializing linear solver - done. Time (sec):  0.0001056
         Solving linear system (col. 0) ...
            Back solving (5 x 5 mtx) ...
-           Back solving (5 x 5 mtx) - done. Time (sec):  0.0000000
-        Solving linear system (col. 0) - done. Time (sec):  0.0000000
-     Training - done. Time (sec):  0.0000000
+           Back solving (5 x 5 mtx) - done. Time (sec):  0.0000622
+        Solving linear system (col. 0) - done. Time (sec):  0.0000734
+     Training - done. Time (sec):  0.0003755
   ___________________________________________________________________________
      
    Evaluation
@@ -80,9 +77,9 @@ Usage
         # eval points. : 100
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0000000
+     Predicting - done. Time (sec):  0.0000215
      
-     Prediction time/pt. (sec) :  0.0000000
+     Prediction time/pt. (sec) :  0.0000002
      
   
 .. figure:: surrogate_models_Test_test_rbf.png
@@ -112,20 +109,25 @@ All surrogate modeling methods implement the following API, though some of the f
 
   .. automethod:: smt.surrogate_models.surrogate_model.SurrogateModel.predict_variances
 
+  .. automethod:: smt.surrogate_models.surrogate_model.SurrogateModel.predict_variance_derivatives
+
+  .. automethod:: smt.surrogate_models.surrogate_model.SurrogateModel.predict_variance_gradient
+
+  .. automethod:: smt.surrogate_models.surrogate_model.SurrogateModel.save
+
+  .. automethod:: smt.surrogate_models.surrogate_model.SurrogateModel.load
+
 
 How to save and load trained surrogate models
 ---------------------------------------------
 
-The SurrogateModel API does not contain any save/load interface. 
-Therefore the user has to handle these operations by him/herself. Below some tips to implement save and load.
-
-For models written in pure Python
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-These operations can be implemented using the `pickle <https://docs.python.org/3/library/pickle.html>`_ module.
+As of SMT 2.9, the surrogate API offers save/load methods which can be used as below.
 
 Saving the model
 """"""""""""""""
+
+The instance method ``save()`` is used to save the trained model (here ``KRG``)
+in a binary file named ``kriging.bin``.
 
 .. code-block:: python
    
@@ -133,41 +135,16 @@ Saving the model
    sm.set_training_values(xtrain, ytrain)
    sm.train()
 
-   filename = "kriging.pkl"
-   with open(filename, "wb") as f:
-      pickle.dump(sm, f)
-
-Loading the model
-"""""""""""""""""
-.. code-block:: python
-
-   sm2 = None
-   filename = "kriging.pkl"
-   with open(filename, "rb") as f:
-      sm2 = pickle.load(f)
-
-
-For models written in  C++ (namely IDW, RBF, RMTB and RMTC)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-These models can be cached using their `data_dir` option. Provided the user gives the same training values
-the model is not retrained but reloaded from cache directory. So by saving the cache directory and the training data,
-one is able to avoid the training cost and reload the model from cached data.
-
-Saving the model
-""""""""""""""""
-
-.. code-block:: python
-
-   sm = RBF(data_dir="./cache")
-   sm.set_training_values(xtrain, ytrain)
-   sm.train()
+   sm.save("kriging.bin ")
 
 Loading the model
 """""""""""""""""
 
+The previous model can be reloaded knowing the type of surrogate being saved (ie. ``KRG``)
+from the binary file with:
+
 .. code-block:: python
 
-   sm2 = RBF(data_dir="./cache")
-   sm2.set_training_values(xtrain, ytrain)   # same training data as above!
-   sm2.train()                               # actual training is skipped, cached data model is loaded 
+   sm2 = KRG.load("kriging.bin")
+   ytest = sm2.predict_values(xtest)
+

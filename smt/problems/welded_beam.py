@@ -5,12 +5,18 @@ Author: Dr. Mohamed Amine Bouhlel <mbouhlel@umich.edu>
 This package is distributed under New BSD license.
 
 Welded beam problem from:
-Liu, H., Xu, S., & Wang, X. Sampling strategies and metamodeling techniques for engineering design: comparison and application. In ASME Turbo Expo 2016: Turbomachinery Technical Conference and Exposition. American Society of Mechanical Engineers. June, 2016.
-Deb, K. An Efficient Constraint Handling Method for Genetic Algorithms. Computer methods in applied mechanics and engineering, 186(2), pp. 311-338. 2000.
+Liu, H., Xu, S., & Wang, X. Sampling strategies and metamodeling techniques for engineering design:
+comparison and application. In ASME Turbo Expo 2016: Turbomachinery Technical Conference and Exposition.
+American Society of Mechanical Engineers. June, 2016.
+
+Deb, K. An Efficient Constraint Handling Method for Genetic Algorithms.
+Computer methods in applied mechanics and engineering, 186(2), pp. 311-338. 2000.
 """
+
 import numpy as np
-from scipy.misc import derivative
+
 from smt.problems.problem import Problem
+from smt.utils.misc import SCIPY_DERIVATIVE
 
 
 class WeldedBeam(Problem):
@@ -49,20 +55,20 @@ class WeldedBeam(Problem):
                 args[var] = x
                 return func(*args)
 
-            return derivative(wraps, point[var], dx=1e-6)
+            return SCIPY_DERIVATIVE(wraps, point[var], dx=1e-6)
 
         def func(x0, x1, x2):
             tau1 = 6000 / (np.sqrt(2) * x1 * x2)
             tau2 = (
                 6000
                 * (14 + 0.5 * x2)
-                * np.sqrt(0.25 * (x2 ** 2 + (x1 + x0) ** 2))
+                * np.sqrt(0.25 * (x2**2 + (x1 + x0) ** 2))
                 / (2 * (0.707 * x1 * x2 * (x2 / 12.0 + 0.25 * (x1 + x0) ** 2)))
             )
             return np.sqrt(
-                tau1 ** 2
-                + tau2 ** 2
-                + x2 * tau1 * tau2 / np.sqrt(0.25 * (x2 ** 2 + (x1 + x0) ** 2))
+                tau1**2
+                + tau2**2
+                + x2 * tau1 * tau2 / np.sqrt(0.25 * (x2**2 + (x1 + x0) ** 2))
             )
 
         for i in range(ne):

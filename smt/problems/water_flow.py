@@ -5,13 +5,18 @@ Author: Dr. Mohamed Amine Bouhlel <mbouhlel@umich.edu>
 This package is distributed under New BSD license.
 
 Water flow problem from:
-Liu, H., Xu, S., & Wang, X. Sampling strategies and metamodeling techniques for engineering design: comparison and application. In ASME Turbo Expo 2016: Turbomachinery Technical Conference and Exposition. American Society of Mechanical Engineers. June, 2016.
-Morris, M. D., Mitchell, T. J., and Ylvisaker, D. Bayesian Design and Analysis of Computer Experiments: Use of Derivatives in Surface Prediction. Technometrics, 35(3), pp. 243-255. 1993.
+Liu, H., Xu, S., & Wang, X. Sampling strategies and metamodeling techniques for engineering design:
+comparison and application. In ASME Turbo Expo 2016: Turbomachinery Technical Conference and Exposition.
+American Society of Mechanical Engineers. June, 2016.
+
+Morris, M. D., Mitchell, T. J., and Ylvisaker, D. Bayesian Design and Analysis of Computer Experiments:
+Use of Derivatives in Surface Prediction. Technometrics, 35(3), pp. 243-255. 1993.
 """
+
 import numpy as np
-from scipy.misc import derivative
 
 from smt.problems.problem import Problem
+from smt.utils.misc import SCIPY_DERIVATIVE
 
 
 class WaterFlow(Problem):
@@ -52,7 +57,7 @@ class WaterFlow(Problem):
                 args[var] = x
                 return func(*args)
 
-            return derivative(wraps, point[var], dx=1e-6)
+            return SCIPY_DERIVATIVE(wraps, point[var], dx=1e-6)
 
         def func(x0, x1, x2, x3, x4, x5, x6, x7):
             return (
@@ -62,7 +67,7 @@ class WaterFlow(Problem):
                 * (x3 - x5)
                 / (
                     np.log(x1 / x0)
-                    * (1 + 2 * x6 * x2 / (np.log(x1 / x0) * x0 ** 2 * x7) + x2 / x4)
+                    * (1 + 2 * x6 * x2 / (np.log(x1 / x0) * x0**2 * x7) + x2 / x4)
                 )
             )
 

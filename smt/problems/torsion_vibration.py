@@ -5,13 +5,20 @@ Author: Dr. Mohamed Amine Bouhlel <mbouhlel@umich.edu>
 This package is distributed under New BSD license.
 
 Torsion vibration problem from:
-Liu, H., Xu, S., & Wang, X. Sampling strategies and metamodeling techniques for engineering design: comparison and application. In ASME Turbo Expo 2016: Turbomachinery Technical Conference and Exposition. American Society of Mechanical Engineers. June, 2016.
-Wang, L., Beeson, D., Wiggs, G., and Rayasam, M. A Comparison of Metamodeling Methods Using Practical Industry Requirements. In Proceedings of the 47th AIAA/ASME/ASCE/AHS/ASC structures, structural dynamics, and materials conference, Newport, RI, pp. AIAA 2006-1811.
+Liu, H., Xu, S., & Wang, X. Sampling strategies and metamodeling techniques for engineering design:
+comparison and application. In ASME Turbo Expo 2016: Turbomachinery Technical Conference and Exposition.
+American Society of Mechanical Engineers. June, 2016.
+
+Wang, L., Beeson, D., Wiggs, G., and Rayasam, M.
+A Comparison of Metamodeling Methods Using Practical Industry Requirements.
+In Proceedings of the 47th AIAA/ASME/ASCE/AHS/ASC structures, structural dynamics,
+and materials conference, Newport, RI, pp. AIAA 2006-1811.
 """
+
 import numpy as np
-from scipy.misc import derivative
 
 from smt.problems.problem import Problem
+from smt.utils.misc import SCIPY_DERIVATIVE
 
 
 class TorsionVibration(Problem):
@@ -84,7 +91,7 @@ class TorsionVibration(Problem):
                 args[var] = x
                 return func(*args)
 
-            return derivative(wraps, point[var], dx=1e-6)
+            return SCIPY_DERIVATIVE(wraps, point[var], dx=1e-6)
 
         def func(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14):
             K1 = np.pi * x2 * x0 / (32 * x1)
@@ -97,7 +104,7 @@ class TorsionVibration(Problem):
             a = 1
             b = -((K1 + K2) / J1 + (K2 + K3) / J2)
             c = (K1 * K2 + K2 * K3 + K3 * K1) / (J1 * J2)
-            return np.sqrt((-b - np.sqrt(b ** 2 - 4 * a * c)) / (2 * a)) / (2 * np.pi)
+            return np.sqrt((-b - np.sqrt(b**2 - 4 * a * c)) / (2 * a)) / (2 * np.pi)
 
         for i in range(ne):
             x0 = x[i, 0]

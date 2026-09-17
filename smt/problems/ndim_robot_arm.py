@@ -5,16 +5,18 @@ This package is distributed under New BSD license.
 
 N-dimensional robot arm problem.
 """
+
 import numpy as np
 
-from smt.utils.options_dictionary import OptionsDictionary
 from smt.problems.problem import Problem
 from smt.problems.reduced_problem import ReducedProblem
 from smt.problems.robot_arm import RobotArm
+from smt.utils.options_dictionary import OptionsDictionary
 
 
 class NdimRobotArm(Problem):
     def __init__(self, ndim=1, w=0.2):
+        super().__init__()
         self.problem = ReducedProblem(
             RobotArm(ndim=2 * (ndim + 1)), np.arange(3, 2 * (ndim + 1), 2), w=w
         )

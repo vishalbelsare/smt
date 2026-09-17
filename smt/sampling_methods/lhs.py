@@ -3,17 +3,18 @@ Author: Dr. John T. Hwang <hwangjt@umich.edu>
 
 This package is distributed under New BSD license.
 
-LHS sampling; uses the pyDOE2 package.
+LHS sampling; uses the pydoe package.
 """
-from pyDOE2 import lhs
-from scipy.spatial.distance import pdist, cdist
+
 import numpy as np
+from pydoe import lhs
+from scipy.spatial.distance import cdist, pdist
 
 from smt.sampling_methods.sampling_method import ScaledSamplingMethod
 
 
 class LHS(ScaledSamplingMethod):
-    def _initialize(self):
+    def _initialize(self, **kwargs):
         self.options.declare(
             "criterion",
             "c",
@@ -33,10 +34,18 @@ class LHS(ScaledSamplingMethod):
             + "c, m, cm and corr are abbreviation of center, maximin, centermaximin and correlation, respectively",
         )
         self.options.declare(
-            "random_state",
-            types=(type(None), int, np.random.RandomState),
-            desc="Numpy RandomState object or seed number which controls random draws",
+            "seed",
+            types=(type(None), int, np.random.Generator),
+            desc="Numpy seed number or random generator which controls random draws",
         )
+
+        self.options.update(kwargs)
+
+        # RandomState is and has to be initialized once at constructor time,
+        # not in _compute to avoid yielding the same dataset again and again
+        self.rng = np.random.default_rng()
+        if self.options["seed"] is not None:
+            self.rng = np.random.default_rng(self.options["seed"])
 
     def _compute(self, nt):
         """
@@ -57,19 +66,12 @@ class LHS(ScaledSamplingMethod):
         xlimits = self.options["xlimits"]
         nx = xlimits.shape[0]
 
-        if isinstance(self.options["random_state"], np.random.RandomState):
-            self.random_state = self.options["random_state"]
-        elif isinstance(self.options["random_state"], int):
-            self.random_state = np.random.RandomState(self.options["random_state"])
-        else:
-            self.random_state = np.random.RandomState()
-
         if self.options["criterion"] != "ese":
             return lhs(
                 nx,
                 samples=nt,
                 criterion=self.options["criterion"],
-                random_state=self.random_state,
+                seed=self.rng,
             )
         elif self.options["criterion"] == "ese":
             return self._ese(nx, nt)
@@ -87,7 +89,6 @@ class LHS(ScaledSamplingMethod):
         fixed_index=[],
     ):
         """
-
         Returns an optimized design starting from design X. For more information,
         see R. Jin, W. Chen and A. Sudjianto (2005):
         An efficient algorithm for constructing optimal design of computer
@@ -168,7 +169,6 @@ class LHS(ScaledSamplingMethod):
 
             # Inner loop
             for i in range(inner_loop):
-
                 modulo = (i + 1) % d
                 l_X = list()
                 l_PhiP = list()
@@ -188,7 +188,9 @@ class LHS(ScaledSamplingMethod):
                 PhiP_try = l_PhiP[k]
 
                 # Threshold of acceptance
-                if PhiP_try - PhiP_ <= T * self.random_state.rand(1)[0]:
+                rand = self.rng.random(1)
+
+                if PhiP_try - PhiP_ <= T * rand[0]:
                     PhiP_ = PhiP_try
                     n_acpt = n_acpt + 1
                     X_ = l_X[k]
@@ -207,7 +209,7 @@ class LHS(ScaledSamplingMethod):
             hist_T.extend(inner_loop * [T])
             hist_proba.extend(inner_loop * [p_accpt])
 
-            if PhiP_best - PhiP_oldbest < tol:
+            if PhiP_oldbest - PhiP_best > tol:
                 # flag_imp = 1
                 if p_accpt >= 0.1 and p_imp < p_accpt:
                     T = 0.8 * T
@@ -275,27 +277,23 @@ class LHS(ScaledSamplingMethod):
         """
 
         # Choose two (different) random rows to perform the exchange
-        i1 = self.random_state.randint(X.shape[0])
+        i1 = self.rng.integers(X.shape[0])
         while i1 in fixed_index:
-            i1 = self.random_state.randint(X.shape[0])
+            i1 = self.rng.integers(X.shape[0])
 
-        i2 = self.random_state.randint(X.shape[0])
+        i2 = self.rng.integers(X.shape[0])
         while i2 == i1 or i2 in fixed_index:
-            i2 = self.random_state.randint(X.shape[0])
+            i2 = self.rng.integers(X.shape[0])
 
         X_ = np.delete(X, [i1, i2], axis=0)
 
         dist1 = cdist([X[i1, :]], X_)
         dist2 = cdist([X[i2, :]], X_)
-        d1 = np.sqrt(
-            dist1 ** 2 + (X[i2, k] - X_[:, k]) ** 2 - (X[i1, k] - X_[:, k]) ** 2
-        )
-        d2 = np.sqrt(
-            dist2 ** 2 - (X[i2, k] - X_[:, k]) ** 2 + (X[i1, k] - X_[:, k]) ** 2
-        )
+        d1 = np.sqrt(dist1**2 + (X[i2, k] - X_[:, k]) ** 2 - (X[i1, k] - X_[:, k]) ** 2)
+        d2 = np.sqrt(dist2**2 - (X[i2, k] - X_[:, k]) ** 2 + (X[i1, k] - X_[:, k]) ** 2)
 
         res = (
-            PhiP_ ** p + (d1 ** (-p) - dist1 ** (-p) + d2 ** (-p) - dist2 ** (-p)).sum()
+            PhiP_**p + (d1 ** (-p) - dist1 ** (-p) + d2 ** (-p) - dist2 ** (-p)).sum()
         ) ** (1.0 / p)
         X[i1, k], X[i2, k] = X[i2, k], X[i1, k]
 
@@ -313,20 +311,12 @@ class LHS(ScaledSamplingMethod):
         """
         # Parameters of maximinESE procedure
         if len(fixed_index) == 0:
-            P0 = lhs(dim, nt, criterion=None, random_state=self.random_state)
-        else:
-            P0 = P0
-            self.random_state = np.random.RandomState()
+            P0 = lhs(dim, nt, criterion=None, seed=self.rng)
         J = 20
         outer_loop = min(int(1.5 * dim), 30)
         inner_loop = min(20 * dim, 100)
 
-        D0 = pdist(P0)
-        R0 = np.corrcoef(P0)
-        corr0 = np.max(np.abs(R0[R0 != 1]))
-        phip0 = self._PhiP(P0)
-
-        P, historic = self._maximinESE(
+        P, _ = self._maximinESE(
             P0,
             outer_loop=outer_loop,
             inner_loop=inner_loop,
@@ -338,7 +328,7 @@ class LHS(ScaledSamplingMethod):
         )
         return P
 
-    def expand_lhs(self, x, n_points, method="basic"):
+    def expand_lhs(self, x, n_points, method="basic", seed=None):
         """
         Given a Latin Hypercube Sample (LHS) "x", returns an expanded LHS
         by adding "n_points" new points.
@@ -353,6 +343,8 @@ class LHS(ScaledSamplingMethod):
             Methodoly for the construction of the expanded LHS.
             The default is "basic". The other option is "ese" to use the
             ese optimization
+        seed : int, optional
+            A seed to allow LHS expansion reproducibility
 
         Returns
         -------
@@ -396,11 +388,14 @@ class LHS(ScaledSamplingMethod):
             [
                 subspace_limits[i].append([intervals[i][ii], intervals[i][ii + 1]])
                 for ii in range(len(subspace_bool[i]))
-                if not (True in subspace_bool[i][ii])
+                if True not in subspace_bool[i][ii]
             ]
 
         # Sampling of the new subspace
-        sampling_new = LHS(xlimits=np.array([[0.0, 1.0]] * len(xlimits)))
+        sampling_new = LHS(
+            xlimits=np.array([[0.0, 1.0]] * len(xlimits)),
+            seed=seed,
+        )
         x_subspace = sampling_new(n_points)
 
         column_index = 0
@@ -414,14 +409,17 @@ class LHS(ScaledSamplingMethod):
 
         H = np.zeros_like(sorted_arr)
         for j in range(len(xlimits)):
-            order = np.random.permutation(len(sorted_arr))
+            order = np.random.default_rng(seed=seed).permutation(len(sorted_arr))
             H[:, j] = sorted_arr[order, j]
 
         x_new = np.concatenate((x, H), axis=0)
 
         if method == "ese":
             # Sampling of the new subspace
-            sampling_new = LHS(xlimits=xlimits, criterion="ese")
+            new_seed = (
+                seed + 1 if seed else None
+            )  # To avoid same sampling as above when seeded
+            sampling_new = LHS(xlimits=xlimits, criterion="ese", seed=new_seed)
             x_new = sampling_new._ese(
                 len(x_new), len(x_new), fixed_index=np.arange(0, len(x), 1), P0=x_new
             )

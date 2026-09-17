@@ -5,12 +5,28 @@ This package is distributed under New BSD license.
 
 Random sampling.
 """
+
 import numpy as np
 
 from smt.sampling_methods.sampling_method import ScaledSamplingMethod
 
 
 class Random(ScaledSamplingMethod):
+    def _initialize(self, **kwargs):
+        self.options.declare(
+            "seed",
+            types=(type(None), int, np.random.Generator),
+            desc="Numpy Generator object or seed number which controls random draws",
+        )
+
+        self.options.update(kwargs)
+
+        # Generator are and have to be initialized once at constructor time,
+        # not in _compute to avoid yielding the same dataset again and again
+        self.rng = np.random.default_rng()
+        if self.options["seed"] is not None:
+            self.rng = np.random.default_rng(self.options["seed"])
+
     def _compute(self, nt):
         """
         Implemented by sampling methods to compute the requested number of sampling points.
@@ -29,4 +45,4 @@ class Random(ScaledSamplingMethod):
         """
         xlimits = self.options["xlimits"]
         nx = xlimits.shape[0]
-        return np.random.rand(nt, nx)
+        return self.rng.random((nt, nx))

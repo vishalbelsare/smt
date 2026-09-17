@@ -4,20 +4,25 @@ Author: Remi Lafage <remi.lafage@onera.fr>
 This package is distributed under New BSD license.
 """
 
-import matplotlib
+try:
+    import matplotlib
 
-matplotlib.use("Agg")
+    matplotlib.use("Agg")
+    NO_MATPLOTLIB = False
+except ImportError:
+    NO_MATPLOTLIB = True
 
 import unittest
-import numpy as np
 from sys import argv
 
+import numpy as np
+
 from smt.applications import MOE, MOESurrogateModel
-from smt.utils.sm_test_case import SMTestCase
 from smt.problems import Branin, LpNorm
-from smt.sampling_methods import FullFactorial
-from smt.utils.misc import compute_rms_error
+from smt.sampling_methods import LHS, FullFactorial
 from smt.surrogate_models import RMTB, RMTC
+from smt.utils.misc import compute_relative_error
+from smt.utils.sm_test_case import SMTestCase
 
 
 class TestMOE(SMTestCase):
@@ -42,8 +47,7 @@ class TestMOE(SMTestCase):
         self.nt = 50
         self.ne = 50
 
-        np.random.seed(0)
-        xt = np.random.sample(self.nt).reshape((-1, 1))
+        xt = np.random.default_rng(seed=0).random(self.nt).reshape((-1, 1))
         yt = self.function_test_1d(xt)
         moe = MOE(
             smooth_recombination=True,
@@ -55,18 +59,16 @@ class TestMOE(SMTestCase):
         moe.train()
 
         # validation data
-        np.random.seed(1)
-        xe = np.random.sample(self.ne)
+        xe = np.random.default_rng(seed=3).random(self.ne)
         ye = self.function_test_1d(xe)
 
-        rms_error = compute_rms_error(moe, xe, ye)
+        rms_error = compute_relative_error(moe, xe, ye)
         self.assert_error(rms_error, 0.0, 3e-1)
 
         self.assertRaises(RuntimeError, lambda: moe.predict_variances(xe))
 
         if TestMOE.plot:
             import matplotlib.pyplot as plt
-            from mpl_toolkits.mplot3d import Axes3D
 
             y = moe.predict_values(xe)
             plt.figure(1)
@@ -87,8 +89,7 @@ class TestMOE(SMTestCase):
         self.nt = 50
         self.ne = 50
 
-        np.random.seed(0)
-        xt = np.random.sample(self.nt).reshape((-1, 1))
+        xt = np.random.default_rng(seed=0).random(self.nt).reshape((-1, 1))
         yt = self.function_test_1d(xt)
         moe = MOE(
             smooth_recombination=True,
@@ -101,11 +102,10 @@ class TestMOE(SMTestCase):
         moe.train()
 
         # validation data
-        np.random.seed(1)
-        xe = np.random.sample(self.ne)
+        xe = np.random.default_rng(seed=3).random(self.ne)
         ye = self.function_test_1d(xe)
 
-        rms_error = compute_rms_error(moe, xe, ye)
+        rms_error = compute_relative_error(moe, xe, ye)
         self.assert_error(rms_error, 0.0, 3e-1)
 
         moe.predict_variances(xe)
@@ -123,7 +123,6 @@ class TestMOE(SMTestCase):
 
         if TestMOE.plot:
             import matplotlib.pyplot as plt
-            from mpl_toolkits.mplot3d import Axes3D
 
             y = moe.predict_values(xe)
             plt.figure(1)
@@ -149,8 +148,7 @@ class TestMOE(SMTestCase):
         self.nt = 50
         self.ne = 50
 
-        np.random.seed(0)
-        xt = np.random.sample(self.nt).reshape((-1, 1))
+        xt = np.random.default_rng(seed=0).random(self.nt).reshape((-1, 1))
         yt = self.function_test_1d(xt)
         moe = MOESurrogateModel(
             smooth_recombination=True,
@@ -165,11 +163,10 @@ class TestMOE(SMTestCase):
         self.assertFalse(moe.supports["variances"])
 
         # validation data
-        np.random.seed(1)
-        xe = np.random.sample(self.ne)
+        xe = np.random.default_rng(seed=3).random(self.ne)
         ye = self.function_test_1d(xe)
 
-        rms_error = compute_rms_error(moe, xe, ye)
+        rms_error = compute_relative_error(moe, xe, ye)
         self.assert_error(rms_error, 0.0, 3e-1)
 
         self.assertRaises(RuntimeError, lambda: moe.predict_variances(xe))
@@ -188,7 +185,6 @@ class TestMOE(SMTestCase):
 
         if TestMOE.plot:
             import matplotlib.pyplot as plt
-            from mpl_toolkits.mplot3d import Axes3D
 
             y = moe.predict_values(xe)
             plt.figure(1)
@@ -213,7 +209,6 @@ class TestMOE(SMTestCase):
 
         # training data
         sampling = FullFactorial(xlimits=prob.xlimits, clip=True)
-        np.random.seed(0)
         xt = sampling(self.nt)
         yt = prob(xt)
 
@@ -223,16 +218,14 @@ class TestMOE(SMTestCase):
         moe.train()
 
         # validation data
-        np.random.seed(1)
         xe = sampling(self.ne)
         ye = prob(xe)
 
-        rms_error = compute_rms_error(moe, xe, ye)
+        rms_error = compute_relative_error(moe, xe, ye)
         self.assert_error(rms_error, 0.0, 1e-1)
 
         if TestMOE.plot:
             import matplotlib.pyplot as plt
-            from mpl_toolkits.mplot3d import Axes3D
 
             y = moe.predict_values(xe)
             plt.figure(1)
@@ -257,7 +250,6 @@ class TestMOE(SMTestCase):
 
         # training data
         sampling = FullFactorial(xlimits=prob.xlimits, clip=True)
-        np.random.seed(0)
         xt = sampling(self.nt)
         yt = prob(xt)
 
@@ -268,16 +260,14 @@ class TestMOE(SMTestCase):
         moe.train()
 
         # validation data
-        np.random.seed(1)
         xe = sampling(self.ne)
         ye = prob(xe)
 
-        rms_error = compute_rms_error(moe, xe, ye)
+        rms_error = compute_relative_error(moe, xe, ye)
         self.assert_error(rms_error, 0.0, 1e-1)
 
         if TestMOE.plot:
             import matplotlib.pyplot as plt
-            from mpl_toolkits.mplot3d import Axes3D
 
             y = moe.analyse_results(x=xe, operation="predict_values")
             plt.figure(1)
@@ -327,7 +317,6 @@ class TestMOE(SMTestCase):
 
         nt1 = 11
         nt2 = 15
-        ne = 101
 
         # Training data
         X1 = np.linspace(0.001, 0.3, nt1).reshape(nt1, 1)
@@ -341,14 +330,61 @@ class TestMOE(SMTestCase):
         moe.set_training_values(xt, yt)
         moe.train()
 
+    def test_fix_test_data_bug(self):
+        # MOE does not interpolate the first training point
+        def myfunc(x):
+            return ((x * 6 - 2) ** 2) * np.sin((x * 6 - 2) * 2)
+
+        # limits of teh design space
+        xlimits = np.array([[0.0, 1.0]])
+        # LHS DOE with ndoe points
+        ndoe = 6
+
+        # Construction of the DOE
+        sampling = LHS(xlimits=xlimits, criterion="m", seed=0)
+        x1D = sampling(ndoe)
+        x1D = np.sort(x1D, axis=0)
+        # Compute the output
+        y1D = myfunc(x1D)
+
+        # test data
+        num = 50
+        xv1D = sampling(num)
+        xv1D = np.sort(xv1D, axis=0)
+        yv1D = myfunc(xv1D)
+
+        moe1D = MOE(n_clusters=1, xtest=xv1D, ytest=yv1D, allow=["KRG"])
+        moe1D.set_training_values(x1D, y1D)
+        moe1D.train()
+
+        # Check that moe1D is interpolating all training values
+        ypred = moe1D.predict_values(x1D)
+        self.assertTrue(np.allclose(y1D, ypred))
+
+    def test_bad_allow_value(self):
+        nt = 35
+        sampling = FullFactorial(xlimits=np.array([[0, 1]]), clip=True)
+        xt = sampling(nt)
+        yt = self.function_test_1d(xt)
+
+        moe = MOE(n_clusters=1, allow=["TOTO"])
+        moe.set_training_values(xt, yt)
+        with self.assertRaises(ValueError) as context:
+            moe.train()
+        self.assertEqual(
+            "List of experts is empty: check support, allow and deny options wrt "
+            "possible experts: ['KRG', 'KPLS', 'KPLSK', 'LS', 'QP', 'RBF', 'IDW', 'RMTB', 'RMTC']",
+            str(context.exception),
+        )
+
     @staticmethod
     def run_moe_example_1d():
+        import matplotlib.pyplot as plt
         import numpy as np
+
         from smt.applications import MOE
         from smt.sampling_methods import FullFactorial
-        import matplotlib.pyplot as plt
 
-        ndim = 1
         nt = 35
 
         def function_test_1d(x):
@@ -366,7 +402,6 @@ class TestMOE(SMTestCase):
 
         # Training data
         sampling = FullFactorial(xlimits=np.array([[0, 1]]), clip=True)
-        np.random.seed(0)
         xt = sampling(nt)
         yt = function_test_1d(xt)
 
@@ -399,15 +434,13 @@ class TestMOE(SMTestCase):
 
     @staticmethod
     def run_moe_example_2d():
+        import matplotlib.pyplot as plt
         import numpy as np
+        from matplotlib import colors
+
         from smt.applications import MOE
         from smt.problems import LpNorm
         from smt.sampling_methods import FullFactorial
-
-        import sklearn
-        import matplotlib.pyplot as plt
-        from matplotlib import colors
-        from mpl_toolkits.mplot3d import Axes3D
 
         ndim = 2
         nt = 200
@@ -418,7 +451,6 @@ class TestMOE(SMTestCase):
 
         # Training data
         sampling = FullFactorial(xlimits=prob.xlimits, clip=True)
-        np.random.seed(0)
         xt = sampling(nt)
         yt = prob(xt)
 
@@ -431,7 +463,6 @@ class TestMOE(SMTestCase):
         moe.train()
 
         # Validation data
-        np.random.seed(1)
         xe = sampling(ne)
         ye = prob(xe)
 
@@ -444,11 +475,6 @@ class TestMOE(SMTestCase):
         colors_ = list(colors.cnames.items())
         GMM = moe.cluster
         weight = GMM.weights_
-        mean = GMM.means_
-        if sklearn.__version__ < "0.20.0":
-            cov = GMM.covars_
-        else:
-            cov = GMM.covariances_
         prob_ = moe._proba_cluster(xt)
         sort = np.apply_along_axis(np.argmax, 1, prob_)
 

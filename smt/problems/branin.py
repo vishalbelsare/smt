@@ -5,8 +5,10 @@ This package is distributed under New BSD license.
 
 Branin function.
 """
+
 import numpy as np
 
+from smt.design_space import DesignSpace
 from smt.problems.problem import Problem
 
 
@@ -20,6 +22,7 @@ class Branin(Problem):
 
         self.xlimits[0, :] = [-5.0, 10]
         self.xlimits[1, :] = [0.0, 15]
+        self.design_space = DesignSpace(self.xlimits, seed=42)
 
     def _evaluate(self, x, kx):
         """
@@ -46,7 +49,7 @@ class Branin(Problem):
         u = x[:, 1] - b * x[:, 0] ** 2 + c * x[:, 0] - 6
         if kx is None:
             r = 10.0 * (1.0 - t) * np.cos(x[:, 0]) + 10
-            y[:, 0] = u ** 2 + r
+            y[:, 0] = u**2 + r
         else:
             assert kx in [0, 1], "kx must be None, 0 or 1"
             if kx == 0:

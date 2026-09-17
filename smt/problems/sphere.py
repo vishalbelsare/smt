@@ -6,6 +6,7 @@ This package is distributed under New BSD license.
 
 Sphere function.
 """
+
 import numpy as np
 
 from smt.problems.problem import Problem
@@ -38,7 +39,7 @@ class Sphere(Problem):
 
         y = np.zeros((ne, 1), complex)
         if kx is None:
-            y[:, 0] = np.sum(x ** 2, 1).T
+            y[:, 0] = np.sum(x**2, 1).T
         else:
             y[:, 0] = 2 * x[:, kx]
 

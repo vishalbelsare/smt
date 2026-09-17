@@ -71,7 +71,7 @@ release = version
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = "en"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -95,14 +95,20 @@ html_theme = "bizstyle"
 # further.  For a list of options available for each theme, see the
 # documentation.
 #
-# html_theme_options = {}
 
-html_logo = "logos.png"
+html_theme_options = {
+    "rightsidebar": False,
+    "sidebarwidth": 250,
+    "body_min_width": 1100,
+    "body_max_width": 1100,
+}
+
+html_logo = "smt_logo.png"
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ["_static"]
+html_static_path = []
 
 
 # -- Options for HTMLHelp output ------------------------------------------
@@ -165,3 +171,8 @@ texinfo_documents = [
         "Miscellaneous",
     )
 ]
+
+# -- Options for numpydoc
+
+# Avoid WARNING: autosummary: stub file not found...
+numpydoc_class_members_toctree = False

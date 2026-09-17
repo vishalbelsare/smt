@@ -3,12 +3,14 @@ Author: Dr. Mohamed Amine Bouhlel <mbouhlel@umich.edu>
         Dr. John T. Hwang         <hwangjt@umich.edu>
 
 Water flow problem from:
-Xiong, S., Qian, P. Z., & Wu, C. J. (2013). Sequential design and analysis of high-accuracy and low-accuracy computer codes. Technometrics, 55(1), 37-46.
+Xiong, S., Qian, P. Z., & Wu, C. J. (2013). Sequential design and analysis of high-accuracy
+and low-accuracy computer codes. Technometrics, 55(1), 37-46.
 """
+
 import numpy as np
-from scipy.misc import derivative
 
 from smt.problems.problem import Problem
+from smt.utils.misc import SCIPY_DERIVATIVE
 
 
 class WaterFlowLFidelity(Problem):
@@ -49,7 +51,7 @@ class WaterFlowLFidelity(Problem):
                 args[var] = x
                 return func(*args)
 
-            return derivative(wraps, point[var], dx=1e-6)
+            return SCIPY_DERIVATIVE(wraps, point[var], dx=1e-6)
 
         def func(x0, x1, x2, x3, x4, x5, x6, x7):
             return (
@@ -58,7 +60,7 @@ class WaterFlowLFidelity(Problem):
                 * (x3 - x5)
                 / (
                     np.log(x1 / x0)
-                    * (1.5 + 2 * x6 * x2 / (np.log(x1 / x0) * x0 ** 2 * x7) + x2 / x4)
+                    * (1.5 + 2 * x6 * x2 / (np.log(x1 / x0) * x0**2 * x7) + x2 / x4)
                 )
             )
 

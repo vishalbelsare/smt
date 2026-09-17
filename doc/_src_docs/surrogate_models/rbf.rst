@@ -52,15 +52,17 @@ These are given by:
 
 .. math ::
 
-  \phi( \mathbf{x}_i , \mathbf{x}_j ) = \exp \left( \frac{|| \mathbf{x}_i - \mathbf{x}_j ||_2 ^ 2}{d0^2} \right)
+  \phi( \mathbf{x}_i , \mathbf{x}_j ) = \exp \left(- \frac{|| \mathbf{x}_i - \mathbf{x}_j ||_2 ^ 2}{d_0^2} \right)
+
+where :math:`d_0` is a scaling parameter.
 
 Usage
 -----
 
 .. code-block:: python
 
-  import numpy as np
   import matplotlib.pyplot as plt
+  import numpy as np
   
   from smt.surrogate_models import RBF
   
@@ -101,12 +103,12 @@ Usage
         Initializing linear solver ...
            Performing LU fact. (5 x 5 mtx) ...
            Performing LU fact. (5 x 5 mtx) - done. Time (sec):  0.0000000
-        Initializing linear solver - done. Time (sec):  0.0005000
+        Initializing linear solver - done. Time (sec):  0.0000000
         Solving linear system (col. 0) ...
            Back solving (5 x 5 mtx) ...
            Back solving (5 x 5 mtx) - done. Time (sec):  0.0000000
         Solving linear system (col. 0) - done. Time (sec):  0.0000000
-     Training - done. Time (sec):  0.0009999
+     Training - done. Time (sec):  0.0000000
   ___________________________________________________________________________
      
    Evaluation

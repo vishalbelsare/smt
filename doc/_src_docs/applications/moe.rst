@@ -57,12 +57,12 @@ Example 1
 
 .. code-block:: python
 
+  import matplotlib.pyplot as plt
   import numpy as np
+  
   from smt.applications import MOE
   from smt.sampling_methods import FullFactorial
-  import matplotlib.pyplot as plt
   
-  ndim = 1
   nt = 35
   
   def function_test_1d(x):
@@ -80,7 +80,6 @@ Example 1
   
   # Training data
   sampling = FullFactorial(xlimits=np.array([[0, 1]]), clip=True)
-  np.random.seed(0)
   xt = sampling(nt)
   yt = function_test_1d(xt)
   
@@ -115,28 +114,28 @@ Example 1
 
   MOE Experts:  ['KRG', 'KPLS', 'KPLSK', 'LS', 'QP', 'RBF', 'IDW', 'RMTB', 'RMTC']
   MOE1 enabled experts:  ['KRG', 'LS', 'QP', 'KPLS', 'KPLSK', 'RBF', 'RMTC', 'RMTB', 'IDW']
-  Kriging 7.461042343004978
-  LS 6.366118465196035
-  QP 6.271258707217198
-  KPLS 7.461042343004999
-  KPLSK 7.461042343004936
-  RBF 6.525794521705228
-  RMTC 6.5274955736753055
-  RMTB 6.601266321769173
-  IDW 5.755443263320035
+  Kriging 0.9599054019610161
+  LS 2.0995727775991893
+  QP 2.310722069846135
+  KPLS 0.9599054019610161
+  KPLSK 0.9599054019610161
+  RBF 0.7122105680266524
+  RMTC 0.45282839745731646
+  RMTB 0.3597578657089894
+  IDW 0.12658286305366004
   Best expert = IDW
   MOE2 enabled experts:  ['KRG', 'LS', 'IDW']
-  Kriging 0.0034549488826911556
-  LS 0.14196607571546527
-  IDW 0.22651705336130568
+  Kriging 7.583601993693899e-07
+  LS 0.03086687850659722
+  IDW 0.00366740075240353
   Best expert = Kriging
-  Kriging 0.970588440727891
-  LS 0.9705882352941182
-  IDW 0.9909963502468125
+  Kriging 6.373793137726125e-08
+  LS 0.0
+  IDW 0.0018250194376276951
   Best expert = LS
-  Kriging 0.12370331030781688
-  LS 0.1521071464184328
-  IDW 0.12378599723225117
+  Kriging 3.884159983535973e-06
+  LS 0.07309199964574886
+  IDW 0.06980900375922333
   Best expert = Kriging
   
 .. figure:: moe_TestMOE_run_moe_example_1d.png
@@ -148,15 +147,13 @@ Example 2
 
 .. code-block:: python
 
+  import matplotlib.pyplot as plt
   import numpy as np
+  from matplotlib import colors
+  
   from smt.applications import MOE
   from smt.problems import LpNorm
   from smt.sampling_methods import FullFactorial
-  
-  import sklearn
-  import matplotlib.pyplot as plt
-  from matplotlib import colors
-  from mpl_toolkits.mplot3d import Axes3D
   
   ndim = 2
   nt = 200
@@ -167,7 +164,6 @@ Example 2
   
   # Training data
   sampling = FullFactorial(xlimits=prob.xlimits, clip=True)
-  np.random.seed(0)
   xt = sampling(nt)
   yt = prob(xt)
   
@@ -180,7 +176,6 @@ Example 2
   moe.train()
   
   # Validation data
-  np.random.seed(1)
   xe = sampling(ne)
   ye = prob(xe)
   
@@ -193,11 +188,6 @@ Example 2
   colors_ = list(colors.cnames.items())
   GMM = moe.cluster
   weight = GMM.weights_
-  mean = GMM.means_
-  if sklearn.__version__ < "0.20.0":
-      cov = GMM.covars_
-  else:
-      cov = GMM.covariances_
   prob_ = moe._proba_cluster(xt)
   sort = np.apply_along_axis(np.argmax, 1, prob_)
   
@@ -243,46 +233,46 @@ Example 2
 
   MOE Experts:  ['KRG', 'KPLS', 'KPLSK', 'LS', 'QP', 'RBF', 'IDW', 'RMTB', 'RMTC']
   Enabled Experts:  ['KRG', 'LS', 'QP', 'KPLS', 'RBF', 'RMTC', 'IDW']
-  Kriging 1.494137179047464
-  LS 1.5077303443623016
-  QP 1.497472084687915
-  KPLS 1.4938374933009453
-  RBF 1.4947551151875558
-  RMTC 1.4902689705256866
-  IDW 1.4902351945725307
-  Best expert = IDW
-  Kriging 1.0908375338028815
-  LS 1.0982899770653345
-  QP 1.0962913775992766
-  KPLS 1.0908333324371267
-  RBF 1.0907769087211918
-  RMTC 1.0906577972762477
-  IDW 1.13172398181558
-  Best expert = RMTC
-  Kriging 1.0172652637886044
-  LS 1.0451612679414988
-  QP 1.021870693299392
-  KPLS 1.0174915675766345
-  RBF 1.0170431268334987
-  RMTC 1.0309538596868766
-  IDW 1.0163947834915366
-  Best expert = IDW
-  Kriging 1.4184162851122268
-  LS 1.4418735729979624
-  QP 1.4542641515660801
-  KPLS 1.4186599053302746
-  RBF 1.4178300357368523
-  RMTC 1.4350437448979296
-  IDW 1.4188134912804515
-  Best expert = RBF
-  Kriging 1.49415339789026
-  LS 1.521071480977923
-  QP 1.5434778008314816
-  KPLS 1.4936184639200711
-  RBF 1.493811640632744
-  RMTC 1.5370111046658115
-  IDW 1.4918365835244014
-  Best expert = IDW
+  Kriging 0.00046512969292594443
+  LS 0.07157076020656904
+  QP 0.02217838851038167
+  KPLS 0.00042236807700300576
+  RBF 0.0008988900158068231
+  RMTC 0.026049466906317344
+  IDW 0.23729513276511724
+  Best expert = KPLS
+  Kriging 0.002748165803805003
+  LS 0.2084314251325521
+  QP 0.04830566919024468
+  KPLS 0.0016596598645601027
+  RBF 0.0017776802527973163
+  RMTC 0.022599746495076865
+  IDW 0.24113676800837835
+  Best expert = KPLS
+  Kriging 0.002211006330816167
+  LS 0.04486521104672596
+  QP 0.017186868491651075
+  KPLS 1.0366455362903497
+  RBF 0.0027028250420197703
+  RMTC 0.036213637427630896
+  IDW 0.25149856997477293
+  Best expert = Kriging
+  Kriging 0.000780367755292494
+  LS 0.1004848526982306
+  QP 0.032881665708381975
+  KPLS 0.0007142323630438775
+  RBF 0.0008723419092391876
+  RMTC 0.02650646459411697
+  IDW 0.1672279524416464
+  Best expert = KPLS
+  Kriging 0.00015911203253292825
+  LS 0.10034642438446555
+  QP 0.016137577961415787
+  KPLS 0.00011789967208482275
+  RBF 0.00012095247613367939
+  RMTC 0.037426916232803004
+  IDW 0.10818152180292166
+  Best expert = KPLS
   
 .. figure:: moe_TestMOE_run_moe_example_2d.png
   :scale: 80 %
@@ -326,6 +316,11 @@ Options
      -  None
      -  ['ndarray']
      -  Test outputs
+  *  -  ctest
+     -  None
+     -  None
+     -  ['ndarray']
+     -  Derivatives test outputs  used for clustering
   *  -  n_clusters
      -  2
      -  None

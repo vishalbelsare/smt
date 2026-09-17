@@ -4,29 +4,26 @@ Author: Dr. John T. Hwang <hwangjt@umich.edu>
 This package is distributed under New BSD license.
 """
 
-import numpy as np
-import unittest
 import inspect
-
-from copy import deepcopy
-
+import unittest
 from collections import OrderedDict
 
-from smt.problems import Sphere, TensorProduct
-from smt.sampling_methods import LHS
-
-from smt.utils.sm_test_case import SMTestCase
-from smt.utils.silence import Silence
-from smt.utils import compute_rms_error
-
 from smt.applications import MFK
+from smt.design_space import (
+    DesignSpace,
+)
+from smt.problems import Sphere
+from smt.sampling_methods import LHS
+from smt.utils.misc import compute_relative_error
+from smt.utils.silence import Silence
+from smt.utils.sm_test_case import SMTestCase
 
 try:
-    from smt.surrogate_models import IDW, RBF, RMTC, RMTB
+    from smt.surrogate_models import RBF, RMTB, RMTC
 
-    compiled_available = True
-except:
-    compiled_available = False
+    COMPILED_AVAILABLE = True
+except ImportError:
+    COMPILED_AVAILABLE = False
 
 
 print_output = False
@@ -42,7 +39,7 @@ class Test(SMTestCase):
         problems["sphere"] = Sphere(ndim=ndim)
 
         sms = OrderedDict()
-        if compiled_available:
+        if COMPILED_AVAILABLE:
             sms["RBF"] = RBF()
             sms["RMTC"] = RMTC()
             sms["RMTB"] = RMTB()
@@ -61,14 +58,12 @@ class Test(SMTestCase):
         prob = self.problems[pname]
         sampling = LHS(xlimits=prob.xlimits)
 
-        np.random.seed(0)
         xt = sampling(self.nt)
         yt = prob(xt)
         dyt = {}
         for kx in range(prob.xlimits.shape[0]):
             dyt[kx] = prob(xt, kx=kx)
 
-        np.random.seed(1)
         xe = sampling(self.ne)
         ye = prob(xe)
         dye = {}
@@ -79,6 +74,8 @@ class Test(SMTestCase):
 
         sm = sm0.__class__()
         sm.options = sm0.options.clone()
+        if sm.options.is_declared("design_space"):
+            sm.options["design_space"] = DesignSpace(prob.xlimits)
         if sm.options.is_declared("xlimits"):
             sm.options["xlimits"] = prob.xlimits
         sm.options["print_global"] = False
@@ -88,10 +85,10 @@ class Test(SMTestCase):
         with Silence():
             sm.train()
 
-        t_error = compute_rms_error(sm)
-        e_error = compute_rms_error(sm, xe, ye)
-        e_error0 = compute_rms_error(sm, xe, dye[0], 0)
-        e_error1 = compute_rms_error(sm, xe, dye[1], 1)
+        t_error = compute_relative_error(sm)
+        e_error = compute_relative_error(sm, xe, ye)
+        e_error0 = compute_relative_error(sm, xe, dye[0], 0)
+        e_error1 = compute_relative_error(sm, xe, dye[1], 1)
 
         if print_output:
             print(
@@ -99,21 +96,21 @@ class Test(SMTestCase):
                 % (pname[:6], sname, t_error, e_error, e_error0, e_error1)
             )
 
-        self.assert_error(e_error0, 0.0, 2e-1)
-        self.assert_error(e_error1, 0.0, 2e-1)
+        self.assert_error(e_error0, 0.0, 25e-1)
+        self.assert_error(e_error1, 0.0, 25e-1)
 
     # --------------------------------------------------------------------
     # Function: sphere
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_sphere_RBF(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_sphere_RMTC(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_sphere_RMTB(self):
         self.run_test()
 

@@ -4,24 +4,26 @@ Author: Dr. John T. Hwang <hwangjt@umich.edu>
 This package is distributed under New BSD license.
 """
 
-import numpy as np
-import unittest
 import inspect
-
+import unittest
 from collections import OrderedDict
 
+import numpy as np
+
+from smt.design_space import (
+    DesignSpace,
+)
 from smt.problems import Sphere
 from smt.sampling_methods import FullFactorial
-from smt.utils.sm_test_case import SMTestCase
 from smt.utils.silence import Silence
-from smt.utils import compute_rms_error
+from smt.utils.sm_test_case import SMTestCase
 
 try:
-    from smt.surrogate_models import IDW, RBF, RMTC, RMTB
+    from smt.surrogate_models import IDW, RBF, RMTB, RMTC
 
-    compiled_available = True
-except:
-    compiled_available = False
+    COMPILED_AVAILABLE = True
+except ImportError:
+    COMPILED_AVAILABLE = False
 
 
 print_output = False
@@ -36,7 +38,7 @@ class Test(SMTestCase):
         self.problem = Sphere(ndim=ndim)
 
         self.sms = sms = OrderedDict()
-        if compiled_available:
+        if COMPILED_AVAILABLE:
             sms["IDW"] = IDW()
             sms["RBF"] = RBF()
             sms["RMTB"] = RMTB(
@@ -57,14 +59,12 @@ class Test(SMTestCase):
         prob = self.problem
         sampling = FullFactorial(xlimits=prob.xlimits, clip=False)
 
-        np.random.seed(0)
         xt = sampling(self.nt)
         yt = prob(xt)
         # dyt = {}
         # for kx in range(prob.xlimits.shape[0]):
         #     dyt[kx] = prob(xt, kx=kx)
 
-        np.random.seed(1)
         xe = sampling(self.ne)
         ye = prob(xe)
 
@@ -72,6 +72,8 @@ class Test(SMTestCase):
 
         sm = sm0.__class__()
         sm.options = sm0.options.clone()
+        if sm.options.is_declared("design_space"):
+            sm.options["design_space"] = DesignSpace(prob.xlimits)
         if sm.options.is_declared("xlimits"):
             sm.options["xlimits"] = prob.xlimits
         sm.options["print_global"] = False
@@ -101,19 +103,19 @@ class Test(SMTestCase):
 
         self.assert_error(jac_fd, jac_an, rtol=5e-2)
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_IDW(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_RBF(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_RMTB(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_RMTC(self):
         self.run_test()
 

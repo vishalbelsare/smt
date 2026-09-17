@@ -26,8 +26,9 @@ Usage
 
 .. code-block:: python
 
-  import numpy as np
   import matplotlib.pyplot as plt
+  import numpy as np
+  
   from smt.applications.mfk import MFK, NestedLHS
   
   # low fidelity model
@@ -48,14 +49,14 @@ Usage
   
   # Problem set up
   xlimits = np.array([[0.0, 1.0]])
-  xdoes = NestedLHS(nlevel=2, xlimits=xlimits)
+  xdoes = NestedLHS(nlevel=2, xlimits=xlimits, seed=0)
   xt_c, xt_e = xdoes(7)
   
   # Evaluate the HF and LF functions
   yt_e = hf_function(xt_e)
   yt_c = lf_function(xt_c)
   
-  sm = MFK(theta0=xt_e.shape[1] * [1.0])
+  sm = MFK(theta0=xt_e.shape[1] * [1.0], corr="squar_exp")
   
   # low-fidelity dataset names being integers from 0 to level-1
   sm.set_training_values(xt_c, yt_c, name=0)
@@ -69,8 +70,8 @@ Usage
   
   # query the outputs
   y = sm.predict_values(x)
-  mse = sm.predict_variances(x)
-  derivs = sm.predict_derivatives(x, kx=0)
+  _mse = sm.predict_variances(x)
+  _derivs = sm.predict_derivatives(x, kx=0)
   
   plt.figure()
   
@@ -103,7 +104,7 @@ Usage
    Training
      
      Training ...
-     Training - done. Time (sec):  0.0910001
+     Training - done. Time (sec):  0.7061841
   ___________________________________________________________________________
      
    Evaluation
@@ -111,9 +112,9 @@ Usage
         # eval points. : 101
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0005000
+     Predicting - done. Time (sec):  0.0010009
      
-     Prediction time/pt. (sec) :  0.0000050
+     Prediction time/pt. (sec) :  0.0000099
      
   ___________________________________________________________________________
      
@@ -122,9 +123,9 @@ Usage
         # eval points. : 101
      
      Predicting ...
-     Predicting - done. Time (sec):  0.0005000
+     Predicting - done. Time (sec):  0.0000000
      
-     Prediction time/pt. (sec) :  0.0000050
+     Prediction time/pt. (sec) :  0.0000000
      
   
 .. figure:: mfk_TestMFK_run_mfk_example.png
@@ -176,9 +177,29 @@ Options
      -  Regression function type
   *  -  corr
      -  squar_exp
-     -  ['abs_exp', 'squar_exp', 'act_exp', 'matern52', 'matern32', 'gower']
-     -  ['str']
+     -  ['pow_exp', 'abs_exp', 'squar_exp', 'matern52', 'matern32']
+     -  ['str', 'Kernel']
      -  Correlation function type
+  *  -  pow_exp_power
+     -  1.9
+     -  None
+     -  ['float']
+     -  Power for the pow_exp kernel function (valid values in (0.0, 2.0]).                 This option is set automatically when corr option is squar, abs, or matern.
+  *  -  categorical_kernel
+     -  MixIntKernelType.CONT_RELAX
+     -  [<MixIntKernelType.CONT_RELAX: 'CONT_RELAX'>, <MixIntKernelType.GOWER: 'GOWER'>, <MixIntKernelType.EXP_HOMO_HSPHERE: 'EXP_HOMO_HSPHERE'>, <MixIntKernelType.HOMO_HSPHERE: 'HOMO_HSPHERE'>, <MixIntKernelType.COMPOUND_SYMMETRY: 'COMPOUND_SYMMETRY'>, <MixIntKernelType.DIST_ENCODING: 'DIST_ENCODING'>]
+     -  None
+     -  The kernel to use for categorical inputs. Only for non continuous Kriging
+  *  -  categorical_kernel_beta
+     -  1.0
+     -  None
+     -  ['float', 'int']
+     -  Power for the distributional encoding kernel (valid values in (0.0, 2.0]).
+  *  -  hierarchical_kernel
+     -  MixHrcKernelType.ALG_KERNEL
+     -  [<MixHrcKernelType.ALG_KERNEL: 'ALG_KERNEL'>, <MixHrcKernelType.ARC_KERNEL: 'ARC_KERNEL'>]
+     -  None
+     -  The kernel to use for mixed hierarchical inputs. Only for non continuous Kriging
   *  -  nugget
      -  2.220446049250313e-14
      -  None
@@ -195,9 +216,9 @@ Options
      -  ['list', 'ndarray']
      -  bounds for hyperparameters
   *  -  hyper_opt
-     -  Cobyla
-     -  ['Cobyla', 'TNC']
-     -  ['str']
+     -  TNC
+     -  ['Cobyla', 'TNC', 'NoOp']
+     -  None
      -  Optimiser for hyperparameters optimisation
   *  -  eval_noise
      -  False
@@ -210,7 +231,7 @@ Options
      -  ['list', 'ndarray']
      -  Initial noise hyperparameters
   *  -  noise_bounds
-     -  [2.220446049250313e-14, 10000000000.0]
+     -  [np.float64(2.220446049250313e-14), 10000000000.0]
      -  None
      -  ['list', 'ndarray']
      -  bounds for noise hyperparameters
@@ -224,6 +245,26 @@ Options
      -  None
      -  ['int']
      -  number of optimizer runs (multistart method)
+  *  -  xlimits
+     -  None
+     -  None
+     -  ['list', 'ndarray']
+     -  definition of a design space of float (continuous) variables: array-like of size nx x 2 (lower, upper bounds)
+  *  -  design_space
+     -  None
+     -  None
+     -  ['BaseDesignSpace', 'list', 'ndarray']
+     -  definition of the (hierarchical) design space: use `smt.design_space.DesignSpace` as the main API. Also accepts list of float variable bounds
+  *  -  is_ri
+     -  False
+     -  None
+     -  ['bool']
+     -  activate reinterpolation for noisy cases
+  *  -  seed
+     -  41
+     -  None
+     -  ['NoneType', 'int', 'Generator']
+     -  Numpy Generator object or seed number which controls random draws                 for internal optim (set by default to get reproductibility)
   *  -  rho_regr
      -  constant
      -  ['constant', 'linear', 'quadratic']
@@ -234,3 +275,8 @@ Options
      -  [True, False]
      -  ['bool']
      -  If True, the variance at HF samples is forced to zero
+  *  -  propagate_uncertainty
+     -  True
+     -  [True, False]
+     -  ['bool']
+     -  If True, the variance contribution of lower fidelity levels are considered

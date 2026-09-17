@@ -40,8 +40,8 @@ Usage
 
 .. code-block:: python
 
-  import numpy as np
   import matplotlib.pyplot as plt
+  import numpy as np
   
   from smt.surrogate_models import IDW
   
@@ -79,7 +79,7 @@ Usage
    Training
      
      Training ...
-     Training - done. Time (sec):  0.0005000
+     Training - done. Time (sec):  0.0000000
   ___________________________________________________________________________
      
    Evaluation

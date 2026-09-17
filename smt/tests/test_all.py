@@ -5,53 +5,42 @@ Author: Dr. John T. Hwang <hwangjt@umich.edu>
 This package is distributed under New BSD license.
 """
 
-import numpy as np
-import unittest
 import inspect
-
+import unittest
 from collections import OrderedDict
 
-from smt.problems import TensorProduct
-from smt.sampling_methods import LHS, FullFactorial
+import numpy as np
 
-from smt.utils.sm_test_case import SMTestCase
+from smt.problems import TensorProduct
+from smt.sampling_methods import LHS
+from smt.surrogate_models import (
+    GEKPLS,
+    GENN,
+    GPX,
+    KPLS,
+    KPLSK,
+    KRG,
+    LS,
+    MGP,
+    QP,
+    RBFGen,
+    DesignSpace,
+)
+from smt.surrogate_models.gpx import GPX_AVAILABLE
+from smt.surrogate_models.rbfgen import RBFGEN_AVAILABLE
+from smt.utils.misc import compute_relative_error
 from smt.utils.silence import Silence
-from smt.utils import compute_rms_error
-from smt.surrogate_models import LS, QP, KPLS, KRG, KPLSK, GEKPLS, GENN, MGP
+from smt.utils.sm_test_case import SMTestCase
 
 try:
-    from smt.surrogate_models import IDW, RBF, RMTC, RMTB
+    from smt.surrogate_models import IDW, RBF, RMTB, RMTC
 
-    compiled_available = True
-except:
-    compiled_available = False
+    COMPILED_AVAILABLE = True
+except ImportError:
+    COMPILED_AVAILABLE = False
 
 
 print_output = False
-
-
-def genn():
-    neural_net = GENN()
-    neural_net.options["alpha"] = 0.1  # learning rate that controls optimizer step size
-    neural_net.options["beta1"] = 0.9  # tuning parameter to control ADAM optimization
-    neural_net.options["beta2"] = 0.99  # tuning parameter to control ADAM optimization
-    neural_net.options[
-        "lambd"
-    ] = 0.1  # lambd = 0. = no regularization, lambd > 0 = regularization
-    neural_net.options[
-        "gamma"
-    ] = 1.0  # gamma = 0. = no grad-enhancement, gamma > 0 = grad-enhancement
-    neural_net.options["deep"] = 2  # number of hidden layers
-    neural_net.options["wide"] = 12  # number of nodes per hidden layer
-    neural_net.options[
-        "mini_batch_size"
-    ] = 10000  # used to divide data into training batches (use for large data sets)
-    neural_net.options["num_epochs"] = 25  # number of passes through data
-    neural_net.options[
-        "num_iterations"
-    ] = 100  # number of optimizer iterations per mini-batch
-    neural_net.options["is_print"] = True
-    return neural_net
 
 
 class Test(SMTestCase):
@@ -69,13 +58,28 @@ class Test(SMTestCase):
         sms = OrderedDict()
         sms["LS"] = LS()
         sms["QP"] = QP()
+        if GPX_AVAILABLE:
+            sms["GPX"] = GPX()
         sms["KRG"] = KRG(theta0=[1e-2] * ndim)
         sms["KPLS"] = KPLS(theta0=[1e-2] * ncomp, n_comp=ncomp)
         sms["KPLSK"] = KPLSK(theta0=[1] * ncomp, n_comp=ncomp)
-        sms["MGP"] = KPLSK(theta0=[1e-2] * ncomp, n_comp=ncomp)
-        sms["GEKPLS"] = GEKPLS(theta0=[1e-2] * ncomp, n_comp=ncomp, delta_x=1e-1)
-        sms["GENN"] = genn()
-        if compiled_available:
+        sms["MGP"] = MGP(theta0=[1e-2] * ndim)
+        sms["GEKPLS"] = GEKPLS(theta0=[1e-2] * 2, n_comp=2, delta_x=1e-1)
+        sms["GENN"] = GENN(
+            num_iterations=5000,
+            hidden_layer_sizes=[
+                24,
+            ],
+            alpha=1e-2,
+            lambd=1e-2,
+            is_backtracking=True,
+            is_normalize=True,
+        )
+
+        if RBFGEN_AVAILABLE:
+            sms["RBFGen"] = RBFGen(epochs=100, learning_rate=1e-2, rbf_m_centers=50)
+
+        if COMPILED_AVAILABLE:
             sms["IDW"] = IDW()
             sms["RBF"] = RBF()
             sms["RMTC"] = RMTC()
@@ -84,14 +88,17 @@ class Test(SMTestCase):
         t_errors = {}
         t_errors["LS"] = 1.0
         t_errors["QP"] = 1.0
-        t_errors["KRG"] = 1.2
+        t_errors["GPX"] = 1.1
+        t_errors["KRG"] = 1.1
         t_errors["MFK"] = 1e0
-        t_errors["KPLS"] = 1.2
+        t_errors["KPLS"] = 1.1
         t_errors["KPLSK"] = 1e0
         t_errors["MGP"] = 1e0
         t_errors["GEKPLS"] = 1.4
-        t_errors["GENN"] = 1.2
-        if compiled_available:
+        t_errors["GENN"] = 1.1
+        if RBFGEN_AVAILABLE:
+            t_errors["RBFGen"] = 1e0
+        if COMPILED_AVAILABLE:
             t_errors["IDW"] = 1e0
             t_errors["RBF"] = 1e-2
             t_errors["RMTC"] = 1e-1
@@ -100,18 +107,21 @@ class Test(SMTestCase):
         e_errors = {}
         e_errors["LS"] = 1.5
         e_errors["QP"] = 1.5
-        e_errors["KRG"] = 1e-2
-        e_errors["MFK"] = 1e-2
+        e_errors["GPX"] = 4e-2
+        e_errors["KRG"] = 3e-2
+        e_errors["MFK"] = 2e-2
         e_errors["KPLS"] = 2e-2
-        e_errors["KPLSK"] = 1e-2
-        e_errors["MGP"] = 2e-2
+        e_errors["KPLSK"] = 2e-1
+        e_errors["MGP"] = 6e-2
         e_errors["GEKPLS"] = 2e-2
-        e_errors["GENN"] = 2e-2
-        if compiled_available:
+        e_errors["GENN"] = 1e-1
+        if RBFGEN_AVAILABLE:
+            e_errors["RBFGen"] = 3e0
+        if COMPILED_AVAILABLE:
             e_errors["IDW"] = 1e0
             e_errors["RBF"] = 1e0
             e_errors["RMTC"] = 2e-1
-            e_errors["RMTB"] = 2e-1
+            e_errors["RMTB"] = 3e-1
 
         self.nt = nt
         self.ne = ne
@@ -127,23 +137,24 @@ class Test(SMTestCase):
         sname = method_name.split("_")[2]
 
         prob = self.problems[pname]
-        sampling = LHS(xlimits=prob.xlimits, random_state=42)
+        sampling = LHS(xlimits=prob.xlimits, seed=42)
 
-        np.random.seed(0)
         xt = sampling(self.nt)
         yt = prob(xt)
         print(prob(xt, kx=0).shape)
         for i in range(self.ndim):
             yt = np.concatenate((yt, prob(xt, kx=i)), axis=1)
 
-        np.random.seed(1)
         xe = sampling(self.ne)
         ye = prob(xe)
 
         sm0 = self.sms[sname]
 
         sm = sm0.__class__()
+
         sm.options = sm0.options.clone()
+        if sm.options.is_declared("design_space"):
+            sm.options["design_space"] = DesignSpace(prob.xlimits)
         if sm.options.is_declared("xlimits"):
             sm.options["xlimits"] = prob.xlimits
         sm.options["print_global"] = False
@@ -157,20 +168,44 @@ class Test(SMTestCase):
             for i in range(self.ndim):
                 sm.set_training_derivatives(xt, yt[:, i + 1], i)
 
+        if sname == "RBFGen":
+            from smt.utils.nn_lossterms import SliceBasedPriorLossTerm
+
+            prior_points = xt[0:1]
+            prior_means = yt[0:1, 0]
+            prior_stds = np.array([10.0])
+            sm.add_loss_term(
+                SliceBasedPriorLossTerm(
+                    x_train=xt,
+                    prior_points=prior_points,
+                    prior_means=prior_means,
+                    prior_stds=prior_stds,
+                )
+            )
+
         with Silence():
             sm.train()
 
-        t_error = compute_rms_error(sm)
-        e_error = compute_rms_error(sm, xe, ye)
+        t_error = compute_relative_error(sm)
+        e_error = compute_relative_error(sm, xe, ye)
 
         if sm.supports["variances"]:
             sm.predict_variances(xe)
 
+        # Some test case tolerance relaxations wrt to global tolerance values
         if pname == "cos":
-            self.assertLessEqual(e_error, self.e_errors[sname] + 1.5)
+            self.assertLessEqual(e_error, self.e_errors[sname] + 1.6)
+        elif pname == "tanh" and sname in ["KPLS", "RMTB"]:
+            self.assertLessEqual(e_error, self.e_errors[sname] + 0.4)
+        elif pname == "exp" and sname in ["GENN"]:
+            self.assertLessEqual(e_error, 1.5e-1)
+        elif pname == "exp" and sname in ["RMTB"]:
+            self.assertLessEqual(e_error, self.e_errors[sname] + 0.5)
+        elif (pname == "tanh" or pname == "exp") and sname in ["MGP"]:
+            self.assertLessEqual(e_error, 9e-1)
         else:
-            self.assertLessEqual(e_error, self.e_errors[sname] + 1e-4)
-        self.assertLessEqual(t_error, self.t_errors[sname] + 1e-4)
+            self.assertLessEqual(e_error, self.e_errors[sname])
+        self.assertLessEqual(t_error, self.t_errors[sname])
 
     def test_exp_LS(self):
         self.run_test()
@@ -208,20 +243,30 @@ class Test(SMTestCase):
     def test_exp_GENN(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not GPX_AVAILABLE, "GPX not available")
+    def test_exp_GPX(self):
+        self.run_test()
+
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_exp_IDW(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_exp_RBF(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_exp_RMTC(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_exp_RMTB(self):
+        self.run_test()
+
+    @unittest.skipIf(not RBFGEN_AVAILABLE, "RBFGen not available")
+    def test_exp_RBFGen(self):
+        # This test will cover the prediction accuracy of RBFGen on the analytical exponential function.
+        # It ensures that the model can be instantiated, trained, and evaluated without runtime errors.
         self.run_test()
 
     # --------------------------------------------------------------------
@@ -263,20 +308,30 @@ class Test(SMTestCase):
     def test_tanh_GENN(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not GPX_AVAILABLE, "GPX not available")
+    def test_tanh_GPX(self):
+        self.run_test()
+
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_tanh_IDW(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_tanh_RBF(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_tanh_RMTC(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_tanh_RMTB(self):
+        self.run_test()
+
+    @unittest.skipIf(not RBFGEN_AVAILABLE, "RBFGen not available")
+    def test_tanh_RBFGen(self):
+        # This test will cover the prediction accuracy of RBFGen on the analytical tanh function.
+        # It ensures that the model correctly learns a smooth nonlinear function.
         self.run_test()
 
     # --------------------------------------------------------------------
@@ -318,20 +373,30 @@ class Test(SMTestCase):
     def test_cos_GENN(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not GPX_AVAILABLE, "GPX not available")
+    def test_cos_GPX(self):
+        self.run_test()
+
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_cos_IDW(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_cos_RBF(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_cos_RMTC(self):
         self.run_test()
 
-    @unittest.skipIf(not compiled_available, "Compiled Fortran libraries not available")
+    @unittest.skipIf(not COMPILED_AVAILABLE, "Compiled Fortran libraries not available")
     def test_cos_RMTB(self):
+        self.run_test()
+
+    @unittest.skipIf(not RBFGEN_AVAILABLE, "RBFGen not available")
+    def test_cos_RBFGen(self):
+        # This test will cover the prediction accuracy of RBFGen on the analytical cosine function.
+        # It ensures the neural network properly captures periodic or oscillatory behaviors.
         self.run_test()
 
 

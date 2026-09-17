@@ -3,14 +3,12 @@ Author: Dr. John T. Hwang <hwangjt@umich.edu>
 
 This package is distributed under New BSD license.
 """
-import numpy as np
-import scipy.sparse
+
 from numbers import Integral
 
-from smt.utils.linear_solvers import get_solver
-from smt.utils.line_search import get_line_search_class
-from smt.surrogate_models.rmts import RMTS
+import numpy as np
 
+from smt.surrogate_models.rmts import RMTS
 from smt.surrogate_models.rmtsclib import PyRMTB
 
 
@@ -97,6 +95,16 @@ class RMTB(RMTS):
             np.array(num["order_list"], np.int32),
             np.array(num["ctrl_list"], np.int32),
         )
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["rmtsc"] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
+        self._setup()
 
     def _compute_jac_raw(self, ix1, ix2, x):
         xlimits = self.options["xlimits"]

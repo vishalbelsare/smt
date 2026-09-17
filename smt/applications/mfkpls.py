@@ -10,18 +10,11 @@ Adapted on January 2021 by Andres Lopez-Lopera to the new SMT version
 """
 
 import numpy as np
-
-from packaging import version
-from sklearn import __version__ as sklversion
-
-if version.parse(sklversion) < version.parse("0.22"):
-    from sklearn.cross_decomposition.pls_ import PLSRegression as pls
-else:
-    from sklearn.cross_decomposition import PLSRegression as pls
-from sklearn.metrics.pairwise import manhattan_distances
+from sklearn.cross_decomposition import PLSRegression as pls
+from sklearn.metrics.pairwise import check_pairwise_arrays
 
 from smt.applications import MFK
-from smt.utils.kriging_utils import componentwise_distance_PLS
+from smt.surrogate_models.krg_based.distances import componentwise_distance_PLS
 
 
 class MFKPLS(MFK):
@@ -29,8 +22,12 @@ class MFKPLS(MFK):
     Multi-Fidelity model + PLS (done on the highest fidelity level)
     """
 
+    @property
+    def _use_pls(self) -> bool:
+        return True
+
     def _initialize(self):
-        super(MFKPLS, self)._initialize()
+        super()._initialize()
         declare = self.options.declare
         # Like KPLS, MFKPLS used only with "abs_exp" and "squar_exp" correlations
         declare(
@@ -40,6 +37,13 @@ class MFKPLS(MFK):
             desc="Correlation function type",
             types=(str),
         )
+        declare(
+            "hyper_opt",
+            "Cobyla",
+            values=("Cobyla"),
+            desc="Optimiser for hyperparameters optimisation",
+            types=str,
+        )
         declare("n_comp", 1, types=int, desc="Number of principal components")
         self.name = "MFKPLS"
 
@@ -48,11 +52,18 @@ class MFKPLS(MFK):
         Overrides differences function for MFK
         Compute the manhattan_distances
         """
-        return manhattan_distances(X, Y, sum_over_features=False)
+        X, Y = check_pairwise_arrays(X, Y)
+        D = X[:, np.newaxis, :] - Y[np.newaxis, :, :]
+        D = np.abs(D, D)
+        return D.reshape((-1, X.shape[1]))
 
-    def _componentwise_distance(self, dx, opt=0):
+    def _componentwise_distance(self, dx):
         d = componentwise_distance_PLS(
-            dx, self.options["corr"], self.options["n_comp"], self.coeff_pls
+            dx,
+            self.options["corr"],
+            self.options["n_comp"],
+            self.coeff_pls,
+            power=self._pow_exp_power,
         )
         return d
 
@@ -68,4 +79,4 @@ class MFKPLS(MFK):
         return X, y
 
     def _get_theta(self, i):
-        return np.sum(self.optimal_theta[i] * self.coeff_pls ** 2, axis=1)
+        return np.sum(self.optimal_theta[i] * self.coeff_pls**2, axis=1)

@@ -1,13 +1,13 @@
 """
 Author: Dr. John T. Hwang <hwangjt@umich.edu>
-        
+
 This package is distributed under New BSD license.
 """
 
 import os
 
-from preprocess_test import process_test
 from preprocess_options import process_options
+from preprocess_test import process_test
 
 
 def get_file_paths():
@@ -35,7 +35,6 @@ for root, file_name in file_paths_list_rstx:
         lines = f.readlines()
 
     for iline, line in enumerate(lines):
-
         if ".. embed-test" in line:
             lines[iline] = process_test(root, file_name, iline, line)
         elif ".. embed-options-table" in line:

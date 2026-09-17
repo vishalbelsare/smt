@@ -5,25 +5,22 @@ This package is distributed under New BSD license.
 
 """
 
-import numpy as np
-
+import time
 from types import FunctionType
+from typing import Optional
 
-from scipy.stats import norm
+import numpy as np
 from scipy.optimize import minimize
+from scipy.stats import norm
 
-from smt.utils.options_dictionary import OptionsDictionary
 from smt.applications.application import SurrogateBasedApplication
 from smt.applications.mixed_integer import (
     MixedIntegerContext,
-    GOWER,
-    HOMO_GAUSSIAN,
-    FULL_GAUSSIAN,
+    MixedIntegerSamplingMethod,
 )
-from smt.utils.misc import compute_rms_error
-
-from smt.surrogate_models import KPLS, KRG, KPLSK, MGP
+from smt.design_space import BaseDesignSpace, DesignSpace
 from smt.sampling_methods import LHS
+from smt.surrogate_models import GEKPLS, GPX, KPLS, KPLSK, KRG, MGP, CoopCompKRG
 
 
 class Evaluator(object):
@@ -32,7 +29,7 @@ class Evaluator(object):
     User can derive this interface and override the run() method to implement custom multiprocessing.
     """
 
-    def run(self, fun, x):
+    def run(self, fun, x, design_space: Optional[BaseDesignSpace] = None):
         """
         Evaluates fun at x.
 
@@ -49,7 +46,12 @@ class Evaluator(object):
             fun evaluations at the nsamples points.
 
         """
-        return fun(x)
+        if (design_space is not None) and np.any(design_space.is_conditionally_acting):
+            x_corr, eval_is_acting = design_space.correct_get_acting(x)
+            return fun(x_corr, eval_is_acting=eval_is_acting)
+
+        else:
+            return fun(x)
 
 
 class EGO(SurrogateBasedApplication):
@@ -101,7 +103,6 @@ class EGO(SurrogateBasedApplication):
         )
         declare("xdoe", None, types=np.ndarray, desc="Initial doe inputs")
         declare("ydoe", None, types=np.ndarray, desc="Initial doe outputs")
-        declare("xlimits", None, types=np.ndarray, desc="Bounds of function fun inputs")
         declare("verbose", False, types=bool, desc="Print computation information")
         declare(
             "enable_tunneling",
@@ -110,29 +111,21 @@ class EGO(SurrogateBasedApplication):
             desc="Enable the penalization of points that have been already evaluated in EI criterion",
         )
         declare(
-            "categorical_kernel",
-            None,
-            types=str,
-            values=[GOWER, HOMO_GAUSSIAN, FULL_GAUSSIAN],
-            desc="The kernel to use for categorical inputs. Only for non continuous Kriging.",
+            "is_ri",
+            False,
+            types=bool,
+            desc="Enable to re interpolate the variance for training points",
         )
         declare(
             "surrogate",
             KRG(print_global=False),
-            types=(KRG, KPLS, KPLSK, MGP),
+            types=(KRG, KPLS, KPLSK, GEKPLS, MGP, GPX, CoopCompKRG),
             desc="SMT kriging-based surrogate model used internaly",
         )
-        declare(
-            "xtypes",
-            None,
-            types=list,
-            desc="x type specifications: either FLOAT for continuous, INT for integer "
-            "or (ENUM n) for categorical doimension with n levels",
-        )
         self.options.declare(
-            "random_state",
-            types=(type(None), int, np.random.RandomState),
-            desc="Numpy RandomState object or seed number which controls random draws",
+            "seed",
+            types=(type(None), int, np.random.Generator),
+            desc="Numpy Generator object or seed number which controls random draws",
         )
 
     def optimize(self, fun):
@@ -158,7 +151,7 @@ class EGO(SurrogateBasedApplication):
         n_parallel = self.options["n_parallel"]
 
         for k in range(n_iter):
-
+            start_time = time.time()
             # Virtual enrichement loop
             for p in range(n_parallel):
                 # find next best x-coord point to evaluate
@@ -177,56 +170,77 @@ class EGO(SurrogateBasedApplication):
                         )
                     )
                 # Set temporaly the y-coord point based on the kriging prediction
-                y_et_k = self._get_virtual_point(np.atleast_2d(x_et_k), y_data)
+                x_et_k = np.atleast_2d(x_et_k)
+                if self.mixint:
+                    x_et_k, _ = self.design_space.correct_get_acting(x_et_k)
+                y_et_k = self._get_virtual_point(x_et_k, y_data)
 
                 # Update y_data with predicted value
-                y_data = np.atleast_2d(np.append(y_data, y_et_k)).T
+                y_data = y_data.reshape(y_data.shape[0], self.gpr.ny)
+                y_data = np.vstack((y_data, y_et_k))
                 x_data = np.atleast_2d(np.append(x_data, x_et_k, axis=0))
 
             # Compute the real values of y_data
             x_to_compute = np.atleast_2d(x_data[-n_parallel:])
-            if self.mixint and self.options["categorical_kernel"] is None:
-                x_to_compute = self.mixint.fold_with_enum_index(x_to_compute)
-            y = self._evaluator.run(fun, x_to_compute)
+            y = self._evaluator.run(fun, x_to_compute, self.design_space)
             y_data[-n_parallel:] = y
-
+            end_time = time.time()
+            iteration_time = end_time - start_time
+            if self.options["verbose"]:
+                print(f"iteration {k + 1} took {iteration_time:.2f} seconds")
         # Find the optimal point
-        ind_best = np.argmin(y_data)
+        ind_best = np.argmin(y_data if y_data.ndim == 1 else y_data[:, 0])
         x_opt = x_data[ind_best]
         y_opt = y_data[ind_best]
-
-        if self.mixint and self.options["categorical_kernel"] is None:
-            x_opt = self.mixint.fold_with_enum_index(x_opt)[0]
-
         return x_opt, y_opt, ind_best, x_data, y_data
 
     def log(self, msg):
         if self.options["verbose"]:
             print(msg)
 
-    def EI(self, points, y_data, enable_tunneling=False, x_data=None):
+    def EI(self, points, enable_tunneling=False, x_data=None):
         """Expected improvement"""
-        f_min = np.min(y_data)
+        y_data = np.atleast_2d(self.gpr.training_points[None][0][1])
+        f_min = y_data[np.argmin(y_data[:, 0])]
         pred = self.gpr.predict_values(points)
-        sig = np.sqrt(self.gpr.predict_variances(points))
-        args0 = (f_min - pred) / sig
-        args1 = (f_min - pred) * norm.cdf(args0)
-        args2 = sig * norm.pdf(args0)
-        if sig.size == 1 and sig == 0.0:  # can be use only if one point is computed
+        is_ri = self.options["is_ri"]
+
+        # Check to apply a reinterpolation only when it's possible
+        if isinstance(self.gpr, KRG) and is_ri:
+            sig = np.sqrt(self.gpr.predict_variances(points, is_ri=True))
+        else:
+            sig = np.sqrt(self.gpr.predict_variances(points))
+
+        # initialization good format (array or scalar)
+        args0 = (f_min - pred) * 0.0
+        args1 = (f_min - pred) * 0.0
+
+        if sig.size == 1 and np.abs(sig) > 1e-12:
+            args0 = (f_min - pred) / sig
+            args1 = (f_min - pred) * norm.cdf(args0)
+        elif sig.size > 1:
+            for i, sigma in enumerate(list(sig.T[0])):
+                if np.abs(sigma) > 1e-12:
+                    args0[i][0] = (f_min[0] - pred[i][0]) / sigma
+                    args1[i][0] = (f_min[0] - pred[i][0]) * norm.cdf(args0[i][0])
+        if (
+            sig.size == 1 and np.abs(sig) < 1e-12
+        ):  # can be use only if one point is computed
             return 0.0
+        args2 = sig * norm.pdf(args0)
         ei = args1 + args2
         # penalize the points already evaluated with tunneling
         if enable_tunneling:
             for i in range(len(points)):
                 p = np.atleast_2d(points[i])
-                EIp = self.EI(p, y_data, enable_tunneling=False)
+                EIp = self.EI(p, enable_tunneling=False)
                 for x in x_data:
                     x = np.atleast_2d(x)
                     # if np.abs(p-x)<1:
                     # ei[i]=ei[i]*np.reciprocal(1+100*np.exp(-np.reciprocal(1-np.square(p-x))))
-                    pena = (
-                        EIp - self.EI(x, y_data, enable_tunneling=False)
-                    ) / np.power(np.linalg.norm(p - x), 4)
+                    pena = (EIp - self.EI(x, enable_tunneling=False)) / (
+                        1e-9 + np.power(np.linalg.norm(p - x), 4)
+                    )
                     if pena > 0:
                         ei[i] = ei[i] - pena
                     ei[i] = max(ei[i], 0)
@@ -263,37 +277,44 @@ class EGO(SurrogateBasedApplication):
         """
         # Set the model
         self.gpr = self.options["surrogate"]
-        self.xlimits = self.options["xlimits"]
+        if "is_ri" in self.gpr.options:
+            self.gpr.options["is_ri"] = self.options["is_ri"]
+        self.design_space: BaseDesignSpace = self.gpr.design_space
+        if isinstance(self.design_space, DesignSpace):
+            self.design_space.seed = self.options["seed"]
 
         # Handle mixed integer optimization
-        xtypes = self.options["xtypes"]
-        if self.options["categorical_kernel"] is not None:
-            work_in_folded_space = True
-        else:
-            work_in_folded_space = False
-        if xtypes:
-            self.categorical_kernel = self.options["categorical_kernel"]
+        is_continuous = self.design_space.is_all_cont
+        if not is_continuous:
+            self.categorical_kernel = self.gpr.options["categorical_kernel"]
             self.mixint = MixedIntegerContext(
-                xtypes,
-                self.xlimits,
-                work_in_folded_space=work_in_folded_space,
-                categorical_kernel=self.options["categorical_kernel"],
+                self.design_space,
+                work_in_folded_space=True,
             )
 
-            self.gpr = self.mixint.build_surrogate_model(self.gpr)
-            self._sampling = self.mixint.build_sampling_method(
-                LHS,
-                criterion="ese",
-                random_state=self.options["random_state"],
-                output_in_folded_space=work_in_folded_space,
+            underlying_gpr = self.gpr
+            self.gpr = self.mixint.build_kriging_model(self.gpr)
+
+            self.categorical_kernel = underlying_gpr.options["categorical_kernel"]
+            self.mixint = MixedIntegerContext(
+                self.design_space,
+                work_in_folded_space=True,
             )
+            self._sampling = self.mixint.build_sampling_method(
+                seed=self.options["seed"],
+            )
+
         else:
             self.mixint = None
-            self._sampling = LHS(
-                xlimits=self.xlimits,
+            sampling = MixedIntegerSamplingMethod(
+                LHS,
+                self.design_space,
                 criterion="ese",
-                random_state=self.options["random_state"],
+                seed=self.options["seed"],
             )
+            self._sampling = lambda n: sampling(n)
+
+            self.categorical_kernel = None
 
         # Build DOE
         self._evaluator = self.options["evaluator"]
@@ -305,16 +326,23 @@ class EGO(SurrogateBasedApplication):
         else:
             self.log("Initial DOE given")
             x_doe = np.atleast_2d(xdoe)
-            if self.mixint and self.options["categorical_kernel"] is None:
-                x_doe = self.mixint.unfold_with_enum_mask(x_doe)
 
         ydoe = self.options["ydoe"]
         if ydoe is None:
-            y_doe = self._evaluator.run(fun, x_doe)
+            y_doe = self._evaluator.run(fun, x_doe, self.design_space)
         else:  # to save time if y_doe is already given to EGO
             y_doe = ydoe
 
         return x_doe, y_doe
+
+    def _train_gpr(self, x_data, y_data):
+        self.gpr.set_training_values(x_data, y_data)
+        if self.gpr.supports["training_derivatives"]:
+            for kx in range(self.gpr.nx):
+                self.gpr.set_training_derivatives(
+                    x_data, y_data[:, 1 + kx].reshape((y_data.shape[0], 1)), kx
+                )
+        self.gpr.train()
 
     def _find_best_point(self, x_data=None, y_data=None, enable_tunneling=False):
         """
@@ -334,21 +362,30 @@ class EGO(SurrogateBasedApplication):
         boolean: success flag
 
         """
-        self.gpr.set_training_values(x_data, y_data)
-        self.gpr.train()
+        self._train_gpr(x_data, y_data)
 
         criterion = self.options["criterion"]
         n_start = self.options["n_start"]
         n_max_optim = self.options["n_max_optim"]
+        method = "SLSQP"
+        options = {"maxiter": 200}
         if self.mixint:
-            bounds = self.mixint.get_unfolded_xlimits()
+            bounds = self.design_space.get_num_bounds()
+            cons = []
+            for j in range(len(bounds)):
+                lower, upper = bounds[j]
+                lo = {"type": "ineq", "fun": lambda x, lb=lower, i=j: x[i] - lb}
+                up = {"type": "ineq", "fun": lambda x, ub=upper, i=j: ub - x[i]}
+                cons.append(lo)
+                cons.append(up)
+            bounds = None
+            options = {"maxiter": 300}
         else:
-            bounds = self.xlimits
+            bounds = self.design_space.get_num_bounds()
+            cons = ()
 
         if criterion == "EI":
-            self.obj_k = lambda x: -self.EI(
-                np.atleast_2d(x), y_data, enable_tunneling, x_data
-            )
+            self.obj_k = lambda x: -self.EI(np.atleast_2d(x), enable_tunneling, x_data)
         elif criterion == "SBO":
             self.obj_k = lambda x: self.SBO(np.atleast_2d(x))
         elif criterion == "LCB":
@@ -360,15 +397,15 @@ class EGO(SurrogateBasedApplication):
             opt_all = []
             x_start = self._sampling(n_start)
             for ii in range(n_start):
-
                 try:
                     opt_all.append(
                         minimize(
-                            lambda x: float(self.obj_k(x)),
+                            lambda x: float(np.array(self.obj_k(x)).flat[0]),
                             x_start[ii, :],
-                            method="SLSQP",
+                            method=method,
                             bounds=bounds,
-                            options={"maxiter": 200},
+                            constraints=cons,
+                            options=options,
                         )
                     )
 
@@ -379,14 +416,18 @@ class EGO(SurrogateBasedApplication):
                     opt_all.append({"success": False})
 
             opt_all = np.asarray(opt_all)
-
+            for opt_i in opt_all:
+                if (
+                    opt_i["message"]
+                    == "Maximum number of function evaluations has been exceeded."
+                ):
+                    opt_i["success"] = True
             opt_success = opt_all[[opt_i["success"] for opt_i in opt_all]]
             obj_success = np.array([opt_i["fun"] for opt_i in opt_success])
             success = obj_success.size != 0
             if not success:
                 self.log("New start point for the internal optimization")
                 n_optim += 1
-
         if n_optim >= n_max_optim:
             # self.log("Internal optimization failed at EGO iter = {}".format(k))
             return np.atleast_2d(0), False
@@ -426,7 +467,7 @@ class EGO(SurrogateBasedApplication):
             conf = -3.0
 
         if qEI == "KBRand":
-            conf = np.random.randn()
+            conf = np.random.standard_normal()
         pred = self.gpr.predict_values(x)
         var = self.gpr.predict_variances(x)
 

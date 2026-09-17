@@ -4,35 +4,37 @@ Created on Mon Apr 27 15:36:13 2020
 
 @author: Vincent Drouet and Nathalie Bartoli
 in order to validate the variance formula for multifidelity on the branin 2D function
-Comparisons are based  on the paper Le Gratiet et Cannamela 2015  :
-    
-Le Gratiet, L., & Cannamela, C. (2015). 
+Comparisons are based  on the paper Le Gratiet et Cannamela 2015 :
+
+Le Gratiet, L., & Cannamela, C. (2015).
 Cokriging-based sequential design strategies using fast cross-validation
 techniques for multi-fidelity computer codes. Technometrics, 57(3), 418-427.
 https://doi.org/10.1080/00401706.2014.928233
 """
 
-
-import numpy as np
-from smt.applications.mfk import MFK, NestedLHS
-from smt.sampling_methods import LHS
 import unittest
 
+import numpy as np
+
+from smt.applications.mfk import MFK, NestedLHS
+from smt.sampling_methods import LHS
 from smt.utils.sm_test_case import SMTestCase
 
 print_output = True
 
-#%%
+# %%
 # Define the low and high fidelity models
 # Example on a 2D problem: Branin  Function
 A_corr = 0
+
+
 # high fidelity model
 def HF(point):
     # Expensive Forretal function
     res = (
         (
             point[:, 1]
-            - (5.1 / (4 * np.pi ** 2)) * point[:, 0] ** 2
+            - (5.1 / (4 * np.pi**2)) * point[:, 0] ** 2
             + (5 / np.pi) * point[:, 0]
             - 6
         )
@@ -49,10 +51,10 @@ def LF(point):
     # Cheap Forretal function
     res = (
         HF(point)
-        - (0.5 * A_corr ** 2 + A_corr + 0.2)
+        - (0.5 * A_corr**2 + A_corr + 0.2)
         * (
             point[:, 1]
-            - 5.1 / 4 / np.pi ** 2 * point[:, 0] ** 2
+            - 5.1 / 4 / np.pi**2 * point[:, 0] ** 2
             + 5.0 / np.pi * point[:, 0]
             - 6
         )
@@ -117,7 +119,7 @@ class TestMFK_variance(SMTestCase):
             @ np.linalg.solve(R, y_t_hf - H @ rho_beta)
             / (n_HF - 2)
         )[0, 0]
-        sigma2_rho_LG = rho_LG ** 2 + sigma2_LG_2 * M_inv[0, 0]
+        sigma2_rho_LG = rho_LG**2 + sigma2_LG_2 * M_inv[0, 0]
 
         return beta_LG_1, sigma2_LG_1, beta_LG_2, sigma2_LG_2, rho_LG, sigma2_rho_LG
 
@@ -354,7 +356,6 @@ class TestMFK_variance(SMTestCase):
         )
 
     def test_mfk_variance(self):
-
         # To create the doe
         # dim = 2
         nlevel = 2

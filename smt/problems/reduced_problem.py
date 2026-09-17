@@ -5,10 +5,11 @@ This package is distributed under New BSD license.
 
 Reduced problem class - selects a subset of input variables.
 """
+
 import numpy as np
 
-from smt.utils.options_dictionary import OptionsDictionary
 from smt.problems.problem import Problem
+from smt.utils.options_dictionary import OptionsDictionary
 
 
 class ReducedProblem(Problem):
@@ -24,6 +25,7 @@ class ReducedProblem(Problem):
         w : float
             The value to use for all unaccounted for inputs where 0/1 is lower/upper bound.
         """
+        super().__init__()
         self.problem = problem
         self.w = w
 

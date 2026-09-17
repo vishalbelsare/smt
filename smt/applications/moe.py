@@ -5,28 +5,18 @@ This package is distributed under New BSD license.
 
 Mixture of Experts
 """
+
 # TODO : support for best number of clusters
 # TODO : implement verbosity 'print_global'
 # TODO : documentation
 
 import numpy as np
-import warnings
-
-OLD_SKLEARN = False
-try:  # scikit-learn < 0.20.0
-    from sklearn.mixture import GMM as GaussianMixture
-
-    OLD_SKLEARN = True
-except:
-    from sklearn.mixture import GaussianMixture
 from scipy.stats import multivariate_normal
+from sklearn.mixture import GaussianMixture
 
-from smt.utils.options_dictionary import OptionsDictionary
 from smt.applications.application import SurrogateBasedApplication
-from smt.utils.misc import compute_rms_error
 from smt.surrogate_models.surrogate_model import SurrogateModel
-
-warnings.filterwarnings("ignore", category=DeprecationWarning)
+from smt.utils import persistence
 
 MOE_EXPERT_NAMES = [
     "KRG",
@@ -82,15 +72,14 @@ class MOESurrogateModel(SurrogateModel):
             self.moe.set_training_values(xt, yt, name=name)
         self.moe.train()
 
-    def _predict_values(self, x: np.ndarray) -> np.ndarray:
+    def _predict_values(self, x: np.ndarray, is_acting=None) -> np.ndarray:
         return self.moe.predict_values(x)
 
-    def _predict_variances(self, x: np.ndarray) -> np.ndarray:
+    def _predict_variances(self, x: np.ndarray, is_acting=None) -> np.ndarray:
         return self.moe.predict_variances(x)
 
 
 class MOE(SurrogateBasedApplication):
-
     # Names of experts available to be part of the mixture
     AVAILABLE_EXPERTS = [
         name
@@ -113,6 +102,12 @@ class MOE(SurrogateBasedApplication):
 
         declare("xtest", None, types=np.ndarray, desc="Test inputs")
         declare("ytest", None, types=np.ndarray, desc="Test outputs")
+        declare(
+            "ctest",
+            None,
+            types=np.ndarray,
+            desc="Derivatives test outputs  used for clustering",
+        )
 
         declare("n_clusters", 2, types=int, desc="Number of clusters")
         declare(
@@ -178,6 +173,31 @@ class MOE(SurrogateBasedApplication):
         self._enabled_expert_types = self._get_enabled_expert_types()
         return list(self._enabled_expert_types.keys())
 
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        for expert in self._experts:
+            if expert == "IDW":
+                state["idwc"] = None
+            elif expert == "RMTC":
+                state["rmtsc"] = None
+            elif expert == "RMTB":
+                state["rmtsc"] = None
+            elif expert == "RBF":
+                state["rbfc"] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        for expert in self._experts:
+            if expert == "IDW":
+                expert._setup()
+            elif expert == "RMTC":
+                expert._setup()
+            elif expert == "RMTB":
+                expert._setup()
+            elif expert == "RBF":
+                expert._setup()
+
     def set_training_values(self, xt, yt, name=None):
         """
         Set training data (values).
@@ -227,18 +247,21 @@ class MOE(SurrogateBasedApplication):
         # Set test values and trained values
         xtest = self.options["xtest"]
         ytest = self.options["ytest"]
+        ctest = self.options["ctest"]
+        if not ctest:
+            ctest = ytest
         values = np.c_[x, y, c]
-        test_data_present = xtest is not None and ytest is not None
-        if test_data_present:
-            self.test_values = np.c_[xtest, ytest]
-            self.training_values = values
+        self.test_data_present = xtest is not None and ytest is not None
+        if self.test_data_present:
+            self._test_values = np.c_[xtest, ytest, ctest]
+            self._training_values = values
         else:
-            self.test_values, self.training_values = self._extract_part(values, 10)
+            self._test_values, self._training_values = self._extract_part(values, 10)
 
         self.ndim = nx = x.shape[1]
-        xt = self.training_values[:, 0:nx]
-        yt = self.training_values[:, nx : nx + 1]
-        ct = self.training_values[:, nx + 1 :]
+        xt = self._training_values[:, 0:nx]
+        _yt = self._training_values[:, nx : nx + 1]
+        ct = self._training_values[:, nx + 1 :]
 
         # Clustering
         self.cluster = GaussianMixture(
@@ -249,19 +272,20 @@ class MOE(SurrogateBasedApplication):
             raise Exception("Clustering not converged")
 
         # Choice of the experts and training
-        self._fit(xt, yt, ct)
+        self._fit()
 
-        xtest = self.test_values[:, 0:nx]
-        ytest = self.test_values[:, nx : nx + 1]
+        xtest = self._test_values[:, 0:nx]
+        ytest = self._test_values[:, nx : nx + 1]
         # Heaviside factor
         if self.heaviside_optimization and self.n_clusters > 1:
             self.heaviside_factor = self._find_best_heaviside_factor(xtest, ytest)
             print("Best Heaviside factor = {}".format(self.heaviside_factor))
             self.distribs = self._create_clusters_distributions(self.heaviside_factor)
 
-        if not test_data_present:
+        if not self.test_data_present:
             # if we have used part of data to validate, fit on overall data
-            self._fit(x, y, c, new_model=False)
+            self._training_values = values
+            self._fit(new_model=False)
 
     def predict_values(self, x):
         """
@@ -369,45 +393,60 @@ class MOE(SurrogateBasedApplication):
                 if name not in self.options["deny"]
             }
         if not prototypes:
-            ValueError(
-                "List of possible experts is empty: check support, allow and deny options wrt"
+            raise ValueError(
+                f"List of experts is empty: check support, allow and deny options wrt "
+                f"possible experts: {MOE_EXPERT_NAMES}"
             )
+
         return {name: self._surrogate_type[name] for name in prototypes}
 
-    def _fit(self, x_trained, y_trained, c_trained, new_model=True):
+    def _fit(self, new_model=True):
         """
         Find the best model for each cluster (clustering already done) and train it if new_model is True
         otherwise train the points given (choice of best models by cluster already done)
 
         Arguments
         ---------
-        - x_trained: array_like
-            Input training samples
-        - y_trained: array_like
-            Output training samples
-        - c_trained: array_like
-            Clustering training samples
         - new_model : bool (optional)
             Set true to search the best local model
 
         """
         self.distribs = self._create_clusters_distributions(self.heaviside_factor)
 
-        cluster_classifier = self.cluster.predict(np.c_[x_trained, c_trained])
+        nx = self.ndim
+        xt = self._training_values[:, 0:nx]
+        yt = self._training_values[:, nx : nx + 1]
+        ct = self._training_values[:, nx + 1 :]
+
+        xtest = self._test_values[:, 0:nx]
+        ytest = self._test_values[:, nx : nx + 1]
+        ctest = self._test_values[:, nx + 1 :]
 
         # sort trained_values for each cluster
-        clusters = self._cluster_values(np.c_[x_trained, y_trained], cluster_classifier)
+        cluster_classifier = self.cluster.predict(np.c_[xt, ct])
+        clustered_values = self._cluster_values(np.c_[xt, yt], cluster_classifier)
+
+        # sort test_values for each cluster only used in case of new model
+        if new_model:
+            test_cluster_classifier = self.cluster.predict(np.c_[xtest, ctest])
+            clustered_test_values = self._cluster_values(
+                np.c_[xtest, ytest], test_cluster_classifier
+            )
 
         # find model for each cluster
         for i in range(self.n_clusters):
             if new_model:
-                model = self._find_best_model(clusters[i])
+                model = self._find_best_model(
+                    clustered_values[i], clustered_test_values[i]
+                )
                 self._experts.append(model)
-            else:  # retrain the experts with the
-                trained_values = np.array(clusters[i])
-                x_trained = trained_values[:, 0 : self.ndim]
-                y_trained = trained_values[:, self.ndim]
-                self._experts[i].set_training_values(x_trained, y_trained)
+            else:
+                # retrain the experts
+                # used when self._training_values changed with expert best models already found
+                training_values = np.array(clustered_values[i])
+                xtrain = training_values[:, 0 : self.ndim]
+                ytrain = training_values[:, self.ndim]
+                self._experts[i].set_training_values(xtrain, ytrain)
                 self._experts[i].train()
 
     def _predict_hard_output(self, x, output_variances=False):
@@ -467,7 +506,6 @@ class MOE(SurrogateBasedApplication):
         for i in range(len(sort_proba)):
             recombined_value = 0
             for j in range(len(self._experts)):
-
                 if output_variances:
                     expert_value = (
                         self._experts[j].predict_variances(np.atleast_2d(x[i]))[0]
@@ -511,7 +549,7 @@ class MOE(SurrogateBasedApplication):
         mask[indices] = True
         return values[mask], values[~mask]
 
-    def _find_best_model(self, clustered_values):
+    def _find_best_model(self, clustered_values, clustered_test_values):
         """
         Find the best model which minimizes the errors.
 
@@ -527,13 +565,10 @@ class MOE(SurrogateBasedApplication):
 
         """
         dim = self.ndim
-        clustered_values = np.array(clustered_values)
-
         scores = {}
         sms = {}
-
-        # validation with 10% of the training data
-        test_values, training_values = self._extract_part(clustered_values, 10)
+        training_values = np.array(clustered_values)
+        test_values = np.array(clustered_test_values)
 
         for name, sm_class in self._enabled_expert_types.items():
             kwargs = {}
@@ -546,11 +581,11 @@ class MOE(SurrogateBasedApplication):
                     xlimits[i][0] = np.amin(self.x[:, i])
                     xlimits[i][1] = np.amax(self.x[:, i])
                 kwargs = {"xlimits": xlimits}
-
             sm = sm_class(**kwargs)
             sm.options["print_global"] = False
             sm.set_training_values(training_values[:, 0:dim], training_values[:, dim])
             sm.train()
+            sm.kplsk_second_loop = False
 
             expected = test_values[:, dim]
             actual = sm.predict_values(test_values[:, 0:dim]).reshape(-1)
@@ -627,10 +662,7 @@ class MOE(SurrogateBasedApplication):
         distribs = []
         dim = self.ndim
         means = self.cluster.means_
-        if OLD_SKLEARN:
-            cov = heaviside_factor * self.cluster.covars_
-        else:
-            cov = heaviside_factor * self.cluster.covariances_
+        cov = heaviside_factor * self.cluster.covariances_
         for k in range(self.n_clusters):
             meansk = means[k][0:dim]
             covk = cov[k][0:dim, 0:dim]
@@ -754,3 +786,10 @@ class MOE(SurrogateBasedApplication):
             )
 
         return probs
+
+    def save(self, filename):
+        persistence.save(self, filename)
+
+    @staticmethod
+    def load(filename):
+        return persistence.load(filename)
